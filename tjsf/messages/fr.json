@@ -1,0 +1,241 @@
+{
+  "home": {
+    "title": "Bienvenue !",
+    "subtitle": "Rejoignez notre communauté et découvrez une nouvelle façon de communiquer.",
+    "tagline": "Connectez-vous avec vos amis et créez des souvenirs inoubliables.",
+    "createAccount": "Créer un compte",
+    "alreadyHaveAccount": "Vous avez déjà un compte ?",
+    "signIn": "Se connecter",
+    "catchphrase": "Une expérience de chat moderne et intuitive"
+  },
+  "auth": {
+    "login": {
+      "title": "Bon retour !",
+      "subtitle": "Nous sommes si heureux de vous revoir !",
+      "email": "Adresse e-mail",
+      "password": "Mot de passe",
+      "submit": "Connexion",
+      "needAccount": "Besoin d'un compte ?",
+      "register": "S'inscrire"
+    },
+    "register": {
+      "title": "Créer un compte",
+      "email": "Adresse e-mail (uniquement pour vous)",
+      "username": "Nom d'utilisateur (visible aux autres)",
+      "password": "Mot de passe",
+      "submit": "Continuer",
+      "termsPrefix": "En vous inscrivant, vous acceptez les",
+      "terms": "Conditions d'utilisation",
+      "termsAnd": "et la",
+      "privacy": "Politique de confidentialité",
+      "alreadyHaveAccount": "Vous avez déjà un compte ?",
+      "passwordRequirements": {
+        "title": "Le mot de passe doit contenir :",
+        "minLength": "Au moins 12 caractères",
+        "uppercase": "Au moins une majuscule",
+        "lowercase": "Au moins une minuscule",
+        "number": "Au moins un chiffre",
+        "special": "Au moins un caractère spécial"
+      }
+    }
+  },
+  "errors": {
+    "loginError": "Erreur de connexion",
+    "fillAllFields": "Veuillez remplir tous les champs",
+    "invalidPassword": "Veuillez saisir un mot de passe valide",
+    "serverJoinError": "Erreur lors de la connexion au serveur",
+    "code": {
+      "USER_NOT_FOUND": "Utilisateur introuvable",
+      "SERVER_NOT_FOUND": "Serveur introuvable",
+      "CHANNEL_NOT_FOUND": "Salon introuvable",
+      "MESSAGE_NOT_FOUND": "Message introuvable",
+      "INVITATION_NOT_FOUND": "Invitation introuvable ou expirée",
+      "MEMBER_NOT_FOUND": "Membre introuvable",
+      "EMAIL_ALREADY_EXISTS": "Cette adresse email est déjà utilisée",
+      "USERNAME_ALREADY_EXISTS": "Ce nom d'utilisateur est déjà pris",
+      "ALREADY_MEMBER": "Vous êtes déjà membre de ce serveur",
+      "INVALID_CREDENTIALS": "Identifiants invalides",
+      "UNAUTHORIZED": "Vous n'êtes pas connecté",
+      "FORBIDDEN": "Vous n'êtes pas autorisé à accéder à cette ressource",
+      "OWNER_CANNOT_LEAVE": "Le propriétaire ne peut pas quitter le serveur",
+      "USER_BANNED": "Vous êtes banni de ce serveur",
+      "USER_BANNED_PERMANENTLY": "Vous êtes banni de façon permanente de ce serveur",
+      "VALIDATION_ERROR": "Erreur de validation",
+      "INTERNAL_ERROR": "Une erreur interne est survenue",
+      "USE_OWN_INVITATION": "Vous ne pouvez pas utiliser votre propre code d'invitation"
+    }
+  },
+  "chat": {
+    "selectServer": "Créez ou rejoignez un serveur",
+    "selectServerHint": "pour commencer à discuter",
+    "selectServerHintMobile": "Appuyez sur le menu pour commencer",
+    "selectChannel": "Sélectionnez un canal",
+    "selectChannelHint": "Choisissez un canal pour voir les messages",
+    "selectChannelHintMobile": "Appuyez sur le menu pour choisir un canal",
+    "logout": "Se déconnecter"
+  },
+  "channels": {
+    "textChannels": "Canaux textuels",
+    "createChannel": "Créer un canal",
+    "inviteUser": "Inviter un utilisateur",
+    "server": "Serveur",
+    "options": "Options du canal",
+    "delete": "Supprimer le canal",
+    "deleteConfirm": "Êtes vous sûr de vouloir supprimer ce canal ?"
+  },
+  "members": {
+    "title": "Membres",
+    "viewBanned": "Voir les bannis",
+    "online": "En ligne",
+    "offline": "Hors ligne",
+    "invisible": "Invisible",
+    "away": "Absent(e)",
+    "dnd": "Ne pas déranger",
+    "transferOwnership": "Transférer la propriété du serveur",
+    "promoteAdmin": "Promouvoir Admin",
+    "demoteMember": "Retrograder membre",
+    "kick": "Kick le membre",
+    "ban": "Bannir le membre"
+  },
+  "messages": {
+    "defaultChannel": "général",
+    "you": "Vous",
+    "emptyChannel": "Soyez le premier à envoyer un message dans",
+    "editing": "Modification du message",
+    "cancelEdit": "Annuler (Échap)",
+    "tooLong": "Message trop long ({count}/{max}) - Réduisez de {excess} caractères",
+    "nearLimit": "Attention: {count}/{max} caractères",
+    "tooLongTitle": "Message trop long",
+    "placeholder": "Envoyer un message dans #{channel}",
+    "send": "Envoyer",
+    "editButton": "Modifier",
+    "deleteButton": "Supprimer",
+    "edited": "(modifié)"
+  },
+  "typing": {
+    "one": "{username} est en train d'écrire...",
+    "two": "{u1} et {u2} sont en train d'écrire...",
+    "many": "{count} personnes sont en train d'écrire..."
+  },
+  "bans": {
+    "title": "Utilisateurs bannis",
+    "loading": "Chargement...",
+    "empty": "Aucun utilisateur banni",
+    "bannedAt": "Banni le",
+    "permanent": "Bannissement permanent",
+    "expiresAt": "Expire le",
+    "expired": "Expiré",
+    "permanentLabel": "Permanent",
+    "daysHoursRemaining": "{days}j {hours}h restantes",
+    "hoursRemaining": "{hours}h restantes",
+    "unban": "Débannir",
+    "close": "Fermer",
+    "confirmUnban": "Êtes-vous sûr de vouloir débannir cet utilisateur ?"
+  },
+  "banDuration": {
+    "title": "Bannir {name}",
+    "selectDuration": "Sélectionnez la durée du bannissement :",
+    "1hour": "1 heure",
+    "1day": "1 jour",
+    "2days": "2 jours",
+    "1week": "1 semaine",
+    "1month": "1 mois",
+    "permanent": "Permanent",
+    "definitiveLabel": "(définitif)",
+    "cancel": "Annuler",
+    "confirm": "Confirmer le bannissement"
+  },
+  "channelModal": {
+    "titleEdit": "Modifier le canal",
+    "titleCreate": "Créer un canal",
+    "buttonEdit": "Modifier",
+    "buttonCreate": "Créer",
+    "nameLabel": "Nom du canal",
+    "iconLabel": "Icône",
+    "iconDefault": "Défaut (#)",
+    "privateLabel": "Canal privé (réservé aux admins)",
+    "cancel": "Annuler",
+    "tooLong": "Le nom du canal est trop long :"
+  },
+  "dm": {
+    "inboxTitle": "Messages privés",
+    "openInbox": "Ouvrir les messages privés",
+    "defaultConversation": "Message privé",
+    "emptyTitle": "Aucune conversation",
+    "emptyHint": "Cliquez sur l'icône message à côté d'un membre pour démarrer",
+    "startConversation": "Commencez la conversation !",
+    "privateNotice": "Vos messages sont privés",
+    "placeholder": "Message @ {username}",
+    "selectConversation": "Sélectionnez une conversation",
+    "action": "Envoyer un message privé"
+  },
+  "inviteModal": {
+    "title": "Inviter un utilisateur",
+    "maxUses": "Nombre d'utilisations maximum",
+    "validity": "Le code sera valide pendant 24h",
+    "cancel": "Annuler",
+    "generate": "Générer le code",
+    "codeLabel": "Code d'invitation",
+    "copy": "Copier",
+    "copied": "Copié",
+    "error": "Erreur",
+    "validityInfo": "Valide pendant 24h - {uses} utilisation(s) maximum",
+    "close": "Fermer"
+  },
+  "serverModal": {
+    "titleEdit": "Modifier le serveur",
+    "titleCreate": "Créer ou rejoindre un serveur",
+    "subtitleEdit": "Modifier les informations du serveur",
+    "subtitleCreate": "Créer un nouveau serveur",
+    "nameLabel": "Nom du serveur",
+    "descriptionLabel": "Description",
+    "iconLabel": "Photo du serveur (URL)",
+    "iconPlaceholder": "https://...",
+    "removeIcon": "Supprimer la photo",
+    "buttonEdit": "Modifier",
+    "buttonCreate": "Créer",
+    "or": "OU",
+    "joinServer": "Rejoindre un serveur",
+    "inviteCode": "Code d'invitation",
+    "inviteCodePlaceholder": "Entrez le code d'invitation",
+    "joinButton": "Rejoindre le serveur",
+    "cancel": "Annuler",
+    "tooLong": "Le nom du serveur est trop long :",
+    "delete": "Supprimer le serveur",
+    "deleteConfirm": "Êtes-vous sûr de vouloir supprimer ce serveur ?"
+  },
+  "serverList": {
+    "editServer": "Modifier le serveur",
+    "deleteServer": "Supprimer le serveur",
+    "leaveServer": "Quitter le serveur"
+  },
+  "system": {
+    "joined": "{username} a rejoint le serveur",
+    "kicked": "{username} a été expulsé du serveur",
+    "banned": "{username} a été banni du serveur"
+  },
+  "gif": {
+    "searchPlaceholder": "Rechercher un GIF...",
+    "noResults": "Aucun GIF trouvé"
+  },
+  "profile": {
+    "changeStatus": "Changer de status",
+    "options": "Options du profil",
+    "menuTitle": "Profil",
+    "openEditor": "Voir / Modifier le profil",
+    "modalTitle": "Modifier mon profil",
+    "usernameLabel": "Pseudo",
+    "avatarLabel": "Photo de profil (URL)",
+    "statusLabel": "Statut",
+    "preview": "Aperçu",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "saving": "Enregistrement...",
+    "usernameConstraint": "Le pseudo doit contenir entre 3 et 32 caracteres",
+    "updateError": "Impossible de mettre a jour le profil"
+  },
+  "sanction": {
+    "kick": "Vous avez été éjecté de ce serveur",
+    "ban": "Vous avez été banni de ce serveur"
+  }
+}

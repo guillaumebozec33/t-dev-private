@@ -1,0 +1,33 @@
+export const SOCKET_EVENTS_EMIT = {
+  JOIN_SERVER: 'join_server',
+  LEAVE_SERVER: 'leave_server',
+  JOIN_CHANNEL: 'join_channel',
+  LEAVE_CHANNEL: 'leave_channel',
+  JOIN_DM: 'join_dm',
+  LEAVE_DM: 'leave_dm',
+  TYPING_START: 'typing_start',
+  TYPING_STOP: 'typing_stop',
+  UPDATE_STATUS: 'update_status',
+} as const;
+
+export const SOCKET_EVENTS_LISTEN = {
+  NEW_MESSAGE: 'new_message',
+  MESSAGE_DELETED: 'message_deleted',
+  MESSAGE_EDITED: 'message_edited',
+  USER_TYPING: 'user_typing',
+  USER_STOP_TYPING: 'user_stop_typing',
+  USER_STATUS_CHANGED: 'user_status_changed',
+  MEMBER_JOINED: 'member_joined',
+  MEMBER_LEFT: 'member_left',
+  MEMBER_KICKED: 'member_kicked',
+  MEMBER_BANNED: 'member_banned',
+  MEMBER_ROLE_CHANGED: 'member_role_changed',
+  USER_PROFILE_UPDATED: 'user_profile_updated',
+  CHANNEL_CREATED: 'channel_created',
+  CHANNEL_UPDATED: 'channel_updated',
+  CHANNEL_DELETED: 'channel_deleted',
+  SERVER_UPDATED: 'server_updated',
+  DM_MESSAGE_RECEIVED: 'dm_message_received',
+  REACTION_UPDATED: 'reaction_updated',
+  ERROR: 'error',
+} as const;
