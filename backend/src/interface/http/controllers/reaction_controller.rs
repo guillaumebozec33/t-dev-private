@@ -160,6 +160,34 @@ mod tests {
         Router::new()
             .route("/messages/:message_id/reactions", axum::routing::put(toggle_reaction))
             .route("/messages/:message_id/reactions", axum::routing::get(get_reactions))
+            .route("/dm/messages/:message_id/reactions", axum::routing::put(toggle_dm_reaction))
+            .layer(middleware::from_fn_with_state(state.clone(), auth_middleware))
+            .with_state(state)
+    }
+
+    fn make_router_with_io(
+        mock_user_repo: MockUserRepository,
+        mock_reaction_repo: MockReactionRepository,
+        mock_message_repo: MockMessageRepository,
+        mock_dm_repo: MockDmRepository,
+    ) -> Router {
+        let state = AppState::new_for_test_full(
+            Arc::new(mock_user_repo),
+            Arc::new(MockServerRepository::new()),
+            Arc::new(MockChannelRepository::new()),
+            Arc::new(mock_message_repo),
+            Arc::new(mock_dm_repo),
+            Arc::new(mock_reaction_repo),
+            make_settings(),
+        );
+        let (_, io) = socketioxide::SocketIo::new_layer();
+        io.ns("/", |_: socketioxide::extract::SocketRef| {});
+        let state = state.with_socket_io(io);
+
+        Router::new()
+            .route("/messages/:message_id/reactions", axum::routing::put(toggle_reaction))
+            .route("/messages/:message_id/reactions", axum::routing::get(get_reactions))
+            .route("/dm/messages/:message_id/reactions", axum::routing::put(toggle_dm_reaction))
             .layer(middleware::from_fn_with_state(state.clone(), auth_middleware))
             .with_state(state)
     }
@@ -264,6 +292,188 @@ mod tests {
                     .uri(format!("/messages/{}/reactions", message_id))
                     .header(header::AUTHORIZATION, format!("Bearer {}", token))
                     .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    // ── toggle_dm_reaction ─────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_toggle_dm_reaction_success() {
+        let user_id = Uuid::new_v4();
+        let message_id = Uuid::new_v4();
+        let settings = make_settings();
+        let token = make_token(user_id, &settings);
+
+        let mut mock_user_repo = MockUserRepository::new();
+        let mut mock_reaction_repo = MockReactionRepository::new();
+
+        mock_user_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(make_user(user_id))));
+
+        mock_reaction_repo
+            .expect_find_by_user_and_message()
+            .returning(|_, _| Ok(None));
+
+        mock_reaction_repo
+            .expect_create()
+            .returning(move |r| Ok(make_reaction(message_id, user_id, &r.emoji)));
+
+        mock_reaction_repo
+            .expect_find_by_message_id()
+            .returning(move |_| Ok(vec![make_reaction(message_id, user_id, "👍")]));
+
+        let app = make_router(mock_user_repo, mock_reaction_repo);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri(format!("/dm/messages/{}/reactions", message_id))
+                    .header(header::AUTHORIZATION, format!("Bearer {}", token))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(json!({ "emoji": "👍" }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    // ── socket.io variant ──────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_toggle_reaction_with_socket_io() {
+        let user_id = Uuid::new_v4();
+        let message_id = Uuid::new_v4();
+        let channel_id = Uuid::new_v4();
+        let settings = make_settings();
+        let token = make_token(user_id, &settings);
+
+        let mut mock_user_repo = MockUserRepository::new();
+        let mut mock_reaction_repo = MockReactionRepository::new();
+        let mut mock_message_repo = MockMessageRepository::new();
+
+        mock_user_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(make_user(user_id))));
+
+        mock_reaction_repo
+            .expect_find_by_user_and_message()
+            .returning(|_, _| Ok(None));
+
+        mock_reaction_repo
+            .expect_create()
+            .returning(move |r| Ok(make_reaction(message_id, user_id, &r.emoji)));
+
+        mock_reaction_repo
+            .expect_find_by_message_id()
+            .returning(move |_| Ok(vec![make_reaction(message_id, user_id, "👍")]));
+
+        mock_message_repo
+            .expect_find_by_id()
+            .returning(move |_| {
+                use crate::domain::entities::Message;
+                Ok(Some(Message {
+                    id: message_id,
+                    channel_id,
+                    author_id: user_id,
+                    content: "hi".to_string(),
+                    edited: false,
+                    created_at: Utc::now(),
+                    updated_at: Utc::now(),
+                }))
+            });
+
+        let app = make_router_with_io(mock_user_repo, mock_reaction_repo, mock_message_repo, MockDmRepository::new());
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri(format!("/messages/{}/reactions", message_id))
+                    .header(header::AUTHORIZATION, format!("Bearer {}", token))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(json!({ "emoji": "👍" }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    // ── toggle_dm_reaction with socket.io ──────────────────────
+
+    #[tokio::test]
+    async fn test_toggle_dm_reaction_with_socket_io() {
+        let user_id = Uuid::new_v4();
+        let message_id = Uuid::new_v4();
+        let conv_id = Uuid::new_v4();
+        let user1_id = Uuid::new_v4();
+        let user2_id = Uuid::new_v4();
+        let settings = make_settings();
+        let token = make_token(user_id, &settings);
+
+        let mut mock_user_repo = MockUserRepository::new();
+        let mut mock_reaction_repo = MockReactionRepository::new();
+        let mut mock_dm_repo = MockDmRepository::new();
+
+        mock_user_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(make_user(user_id))));
+
+        mock_reaction_repo
+            .expect_find_by_user_and_message()
+            .returning(|_, _| Ok(None));
+        mock_reaction_repo
+            .expect_create()
+            .returning(move |r| Ok(make_reaction(message_id, user_id, &r.emoji)));
+        mock_reaction_repo
+            .expect_find_by_message_id()
+            .returning(move |_| Ok(vec![make_reaction(message_id, user_id, "👍")]));
+
+        mock_dm_repo
+            .expect_find_message_by_id()
+            .returning(move |_| {
+                use crate::domain::entities::DirectMessage;
+                Ok(Some(DirectMessage {
+                    id: message_id,
+                    conversation_id: conv_id,
+                    sender_id: user_id,
+                    content: "hi".to_string(),
+                    created_at: Utc::now(),
+                }))
+            });
+
+        mock_dm_repo
+            .expect_find_conversation_by_id()
+            .returning(move |_| {
+                use crate::domain::entities::Conversation;
+                Ok(Some(Conversation {
+                    id: conv_id,
+                    user1_id,
+                    user2_id,
+                    created_at: Utc::now(),
+                }))
+            });
+
+        let app = make_router_with_io(mock_user_repo, mock_reaction_repo, MockMessageRepository::new(), mock_dm_repo);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri(format!("/dm/messages/{}/reactions", message_id))
+                    .header(header::AUTHORIZATION, format!("Bearer {}", token))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(json!({ "emoji": "👍" }).to_string()))
                     .unwrap(),
             )
             .await

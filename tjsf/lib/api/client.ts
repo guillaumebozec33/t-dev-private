@@ -6,7 +6,7 @@ type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 
 interface RequestOptions {
     method?: HttpMethod;
-    body?: any;
+    body?: unknown;
     headers?: HeadersInit;
     requiresAuth?: boolean;
 }
@@ -84,11 +84,11 @@ class ApiClient {
         return this.request<T>(endpoint, { ...options, method: 'GET' });
     }
 
-    post<T>(endpoint: string, body?: any, options?: Omit<RequestOptions, 'method'>) {
+    post<T>(endpoint: string, body?: unknown, options?: Omit<RequestOptions, 'method'>) {
         return this.request<T>(endpoint, { ...options, method: 'POST', body });
     }
 
-    put<T>(endpoint: string, body?: any, options?: Omit<RequestOptions, 'method'>) {
+    put<T>(endpoint: string, body?: unknown, options?: Omit<RequestOptions, 'method'>) {
         return this.request<T>(endpoint, { ...options, method: 'PUT', body });
     }
 
@@ -96,7 +96,7 @@ class ApiClient {
         return this.request<T>(endpoint, { ...options, method: 'DELETE' });
     }
 
-    patch<T>(endpoint: string, body?: any, options?: Omit<RequestOptions, 'method'>) {
+    patch<T>(endpoint: string, body?: unknown, options?: Omit<RequestOptions, 'method'>) {
         return this.request<T>(endpoint, { ...options, method: 'PATCH', body });
     }
 }

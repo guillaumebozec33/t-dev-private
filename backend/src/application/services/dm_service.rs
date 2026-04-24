@@ -331,4 +331,42 @@ mod tests {
 
         assert!(matches!(result, Err(DomainError::Forbidden(_))));
     }
+
+    // ── get_other_user_id ──────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_get_other_user_id_success() {
+        let user_id = Uuid::new_v4();
+        let other_id = Uuid::new_v4();
+        let conv_id = Uuid::new_v4();
+
+        let mut mock_dm_repo = MockDmRepository::new();
+        mock_dm_repo
+            .expect_find_conversation_by_id()
+            .returning(move |_| Ok(Some(make_conversation(user_id, other_id))));
+
+        let service = DmService::new(Arc::new(mock_dm_repo), Arc::new(MockUserRepository::new()));
+        let result = service.get_other_user_id(user_id, conv_id).await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), other_id);
+    }
+
+    #[tokio::test]
+    async fn test_get_other_user_id_not_participant() {
+        let user_id = Uuid::new_v4();
+        let user1 = Uuid::new_v4();
+        let user2 = Uuid::new_v4();
+        let conv_id = Uuid::new_v4();
+
+        let mut mock_dm_repo = MockDmRepository::new();
+        mock_dm_repo
+            .expect_find_conversation_by_id()
+            .returning(move |_| Ok(Some(make_conversation(user1, user2))));
+
+        let service = DmService::new(Arc::new(mock_dm_repo), Arc::new(MockUserRepository::new()));
+        let result = service.get_other_user_id(user_id, conv_id).await;
+
+        assert!(matches!(result, Err(DomainError::Forbidden(_))));
+    }
 }

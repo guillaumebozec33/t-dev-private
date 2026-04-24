@@ -37,7 +37,7 @@ export function useTauriNotification() {
       const { sendNotification } = await import('@tauri-apps/plugin-notification');
       sendNotification({ title, body });
     } catch {
-      // Silently fail — notifications are non-critical
+
     }
   }, []);
 

@@ -75,6 +75,46 @@ impl AppState {
 }
 
 #[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_settings() -> Settings {
+        Settings {
+            jwt_secret: "secret_test".to_string(),
+            jwt_expiration: 3600,
+            database_url: "postgres://fake".to_string(),
+            redis_url: "redis://fake".to_string(),
+            server_host: "127.0.0.1".to_string(),
+            server_port: 8080,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_app_state_new() {
+        let pool = sqlx::PgPool::connect_lazy(
+            "postgres://rtc_user:rtc_password@localhost:5433/rtc_db"
+        ).unwrap();
+        let redis = redis::Client::open("redis://127.0.0.1/").unwrap();
+        let state = AppState::new(pool, redis, make_settings());
+        assert!(state.socket_io.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_app_state_with_socket_io() {
+        let pool = sqlx::PgPool::connect_lazy(
+            "postgres://rtc_user:rtc_password@localhost:5433/rtc_db"
+        ).unwrap();
+        let redis = redis::Client::open("redis://127.0.0.1/").unwrap();
+        let state = AppState::new(pool, redis, make_settings());
+
+        let (_, io) = socketioxide::SocketIo::new_layer();
+        io.ns("/", |_: socketioxide::extract::SocketRef| {});
+        let state = state.with_socket_io(io);
+        assert!(state.socket_io.is_some());
+    }
+}
+
+#[cfg(test)]
 impl AppState {
     pub fn new_for_test_full(
         user_repo: Arc<dyn UserRepository>,

@@ -19,3 +19,22 @@ impl std::fmt::Display for Role {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_role_display() {
+        assert_eq!(Role::Owner.to_string(), "owner");
+        assert_eq!(Role::Admin.to_string(), "admin");
+        assert_eq!(Role::Member.to_string(), "member");
+    }
+
+    #[test]
+    fn test_role_equality() {
+        assert_eq!(Role::Owner, Role::Owner);
+        assert_ne!(Role::Owner, Role::Admin);
+        assert_ne!(Role::Admin, Role::Member);
+    }
+}

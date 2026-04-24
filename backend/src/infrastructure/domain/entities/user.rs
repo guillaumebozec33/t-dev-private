@@ -27,7 +27,7 @@ impl User {
             email,
             password_hash,
             avatar_url: None,
-            status: UserStatus::Online,
+            status: UserStatus::Offline,
             created_at: now,
             updated_at: now,
         }
@@ -43,7 +43,7 @@ mod tests {
         let user = User::new("testuser".to_string(), "test@example.com".to_string(), "hash".to_string());
         assert_eq!(user.username, "testuser");
         assert_eq!(user.email, "test@example.com");
-        assert_eq!(user.status, UserStatus::Offline);
+        assert_eq!(user.status, UserStatus::Online);
         assert!(user.avatar_url.is_none());
     }
 }

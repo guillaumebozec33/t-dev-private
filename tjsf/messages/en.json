@@ -76,6 +76,7 @@
   },
   "channels": {
     "textChannels": "Text channels",
+    "voiceChannels": "Voice channels",
     "createChannel": "Create a channel",
     "inviteUser": "Invite a user",
     "server": "Server",
@@ -151,11 +152,26 @@
     "buttonEdit": "Edit",
     "buttonCreate": "Create",
     "nameLabel": "Channel name",
+    "typeLabel": "Channel type",
+    "textType": "Text",
+    "voiceType": "Voice",
     "iconLabel": "Icon",
     "iconDefault": "Default (#)",
     "privateLabel": "Private channel (admins only)",
     "cancel": "Cancel",
     "tooLong": "Channel name is too long:"
+  },
+  "voice": {
+    "title": "Voice channel",
+    "join": "Join voice",
+    "leave": "Leave voice",
+    "connecting": "Connecting to voice...",
+    "connected": "Connected to the voice channel",
+    "disconnected": "Disconnected from the voice channel",
+    "participants": "Participants",
+    "empty": "Nobody is in this voice channel yet",
+    "permissionDenied": "Unable to access microphone",
+    "idle": "Join this channel to start audio"
   },
   "dm": {
     "inboxTitle": "Direct messages",

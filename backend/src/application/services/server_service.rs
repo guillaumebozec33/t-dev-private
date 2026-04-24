@@ -24,7 +24,7 @@ impl ServerService {
         if let Some(icon_url) = req.icon_url {
             server.icon_url = if icon_url.is_empty() { None } else { Some(icon_url) };
         }
-        
+
         let created_server = self.server_repo.create(&server).await?;
         
         let member = Member::new(user_id, created_server.id, Role::Owner);
@@ -381,8 +381,8 @@ mod tests {
     use super::*;
     use std::sync::Arc;
     use uuid::Uuid;
-    use chrono::Utc;
-    use crate::domain::entities::{Server, Channel, Member, Invitation};
+    use chrono::{Duration, Utc};
+    use crate::domain::entities::{Server, Channel, Member, Invitation, Ban};
     use crate::domain::enums::Role;
     use crate::domain::repositories::server_repository::MockServerRepository;
     use crate::domain::repositories::channel_repository::MockChannelRepository;
@@ -595,6 +595,7 @@ mod tests {
     #[tokio::test]
     async fn test_join_server_success() {
         let user_id = Uuid::new_v4();
+        let inviter_id = Uuid::new_v4();
         let server_id = Uuid::new_v4();
 
         let mut mock_server_repo = MockServerRepository::new();
@@ -604,7 +605,7 @@ mod tests {
             .returning(|_, _| Ok(None));
         mock_server_repo
             .expect_find_invitation_by_code()
-            .returning(move |_| Ok(Some(make_invitation(server_id, user_id, true))));
+            .returning(move |_| Ok(Some(make_invitation(server_id, inviter_id, true))));
 
         // Pas encore membre
         mock_server_repo
@@ -649,6 +650,7 @@ mod tests {
     #[tokio::test]
     async fn test_join_server_deja_membre() {
         let user_id = Uuid::new_v4();
+        let inviter_id = Uuid::new_v4();
         let server_id = Uuid::new_v4();
 
         let mut mock_server_repo = MockServerRepository::new();
@@ -658,7 +660,7 @@ mod tests {
             .returning(|_, _| Ok(None));
         mock_server_repo
             .expect_find_invitation_by_code()
-            .returning(move |_| Ok(Some(make_invitation(server_id, user_id, true))));
+            .returning(move |_| Ok(Some(make_invitation(server_id, inviter_id, true))));
 
         // Déjà membre → AlreadyMember
         mock_server_repo
@@ -668,6 +670,68 @@ mod tests {
         let service = ServerService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
         let result = service.join_server(user_id, "CODE1234").await;
         assert!(matches!(result, Err(DomainError::AlreadyMember)));
+    }
+
+    #[tokio::test]
+    async fn test_join_server_banned_temp() {
+        let user_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let creator_id = Uuid::new_v4();
+
+        let mut mock_server_repo = MockServerRepository::new();
+        let mock_channel_repo = MockChannelRepository::new();
+
+        mock_server_repo
+            .expect_find_invitation_by_code()
+            .returning(move |_| Ok(Some(make_invitation(server_id, creator_id, true))));
+
+        // Temporary ban (expires in 1 hour)
+        mock_server_repo
+            .expect_find_active_ban()
+            .returning(move |_, _| {
+                let ban = Ban::new(
+                    user_id,
+                    server_id,
+                    creator_id,
+                    Utc::now() + Duration::hours(1),
+                );
+                Ok(Some(ban))
+            });
+
+        let service = ServerService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let result = service.join_server(user_id, "CODE1234").await;
+        assert!(matches!(result, Err(DomainError::UserBanned(_))));
+    }
+
+    #[tokio::test]
+    async fn test_join_server_banned_permanently() {
+        let user_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let creator_id = Uuid::new_v4();
+
+        let mut mock_server_repo = MockServerRepository::new();
+        let mock_channel_repo = MockChannelRepository::new();
+
+        mock_server_repo
+            .expect_find_invitation_by_code()
+            .returning(move |_| Ok(Some(make_invitation(server_id, creator_id, true))));
+
+        // Permanent ban (1000 years)
+        mock_server_repo
+            .expect_find_active_ban()
+            .returning(move |_, _| {
+                let ban = Ban::new(
+                    user_id,
+                    server_id,
+                    creator_id,
+                    Utc::now() + Duration::days(365 * 1000),
+                );
+                Ok(Some(ban))
+            });
+
+        let service = ServerService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let result = service.join_server(user_id, "CODE1234").await;
+        assert!(matches!(result, Err(DomainError::UserBannedPermanently)));
     }
 
     // ── leave_server ───────────────────────────────────────────
@@ -808,5 +872,431 @@ mod tests {
 
         let result = service.create_invitation(user_id, server_id, req).await;
         assert!(result.is_ok());
+    }
+
+    // ── get_user_servers ───────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_get_user_servers_success() {
+        let user_id = Uuid::new_v4();
+        let mut mock_server_repo = MockServerRepository::new();
+        let mock_channel_repo = MockChannelRepository::new();
+
+        mock_server_repo
+            .expect_find_by_user_id()
+            .returning(move |_| Ok(vec![make_server(user_id), make_server(user_id)]));
+
+        let service = ServerService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let result = service.get_user_servers(user_id).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 2);
+    }
+
+    // ── get_members ────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_get_members_success() {
+        let user_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let mut mock_server_repo = MockServerRepository::new();
+        let mock_channel_repo = MockChannelRepository::new();
+
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |_, _| Ok(Some(make_member(user_id, server_id, Role::Owner))));
+
+        mock_server_repo
+            .expect_find_members_with_users()
+            .returning(move |_| Ok(vec![
+                crate::domain::repositories::server_repository::MemberWithUser {
+                    id: Uuid::new_v4(),
+                    user_id,
+                    server_id,
+                    role: Role::Owner,
+                    joined_at: Utc::now(),
+                    username: "alice".to_string(),
+                    avatar_url: None,
+                    status: "online".to_string(),
+                }
+            ]));
+
+        let service = ServerService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let result = service.get_members(user_id, server_id).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 1);
+    }
+
+    // ── ban_member ─────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_ban_member_success() {
+        let owner_id = Uuid::new_v4();
+        let member_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let mut mock_server_repo = MockServerRepository::new();
+        let mock_channel_repo = MockChannelRepository::new();
+
+        mock_server_repo
+            .expect_find_member()
+            .times(2)
+            .returning(move |uid, _| {
+                if uid == owner_id {
+                    Ok(Some(make_member(owner_id, server_id, Role::Owner)))
+                } else {
+                    Ok(Some(make_member(member_id, server_id, Role::Member)))
+                }
+            });
+
+        mock_server_repo
+            .expect_create_ban()
+            .returning(move |ban| Ok(ban.clone()));
+
+        mock_server_repo
+            .expect_remove_member()
+            .returning(|_, _| Ok(()));
+
+        let service = ServerService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let req = BanMemberRequest { duration_hours: Some(24) };
+        let result = service.ban_member(owner_id, server_id, member_id, req).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_ban_member_permanent() {
+        let owner_id = Uuid::new_v4();
+        let member_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let mut mock_server_repo = MockServerRepository::new();
+        let mock_channel_repo = MockChannelRepository::new();
+
+        mock_server_repo
+            .expect_find_member()
+            .times(2)
+            .returning(move |uid, _| {
+                if uid == owner_id {
+                    Ok(Some(make_member(owner_id, server_id, Role::Owner)))
+                } else {
+                    Ok(Some(make_member(member_id, server_id, Role::Member)))
+                }
+            });
+
+        mock_server_repo
+            .expect_create_ban()
+            .returning(move |ban| Ok(ban.clone()));
+
+        mock_server_repo
+            .expect_remove_member()
+            .returning(|_, _| Ok(()));
+
+        let service = ServerService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let req = BanMemberRequest { duration_hours: None }; // permanent
+        let result = service.ban_member(owner_id, server_id, member_id, req).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_ban_member_cannot_ban_self() {
+        let owner_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let mut mock_server_repo = MockServerRepository::new();
+        let mock_channel_repo = MockChannelRepository::new();
+
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |_, _| Ok(Some(make_member(owner_id, server_id, Role::Owner))));
+
+        let service = ServerService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let req = BanMemberRequest { duration_hours: Some(24) };
+        let result = service.ban_member(owner_id, server_id, owner_id, req).await;
+        assert!(matches!(result, Err(DomainError::ValidationError(_))));
+    }
+
+    #[tokio::test]
+    async fn test_ban_member_not_privileged() {
+        let user_id = Uuid::new_v4();
+        let member_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let mut mock_server_repo = MockServerRepository::new();
+        let mock_channel_repo = MockChannelRepository::new();
+
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |_, _| Ok(Some(make_member(user_id, server_id, Role::Member))));
+
+        let service = ServerService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let req = BanMemberRequest { duration_hours: Some(24) };
+        let result = service.ban_member(user_id, server_id, member_id, req).await;
+        assert!(matches!(result, Err(DomainError::Forbidden(_))));
+    }
+
+    // ── unban_member ───────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_unban_member_success() {
+        let owner_id = Uuid::new_v4();
+        let user_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let mut mock_server_repo = MockServerRepository::new();
+        let mock_channel_repo = MockChannelRepository::new();
+
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |_, _| Ok(Some(make_member(owner_id, server_id, Role::Owner))));
+
+        mock_server_repo
+            .expect_remove_ban()
+            .returning(|_, _| Ok(()));
+
+        let service = ServerService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let result = service.unban_member(owner_id, server_id, user_id).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_unban_member_not_owner() {
+        let user_id = Uuid::new_v4();
+        let target_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let mut mock_server_repo = MockServerRepository::new();
+        let mock_channel_repo = MockChannelRepository::new();
+
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |_, _| Ok(Some(make_member(user_id, server_id, Role::Admin))));
+
+        let service = ServerService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let result = service.unban_member(user_id, server_id, target_id).await;
+        assert!(matches!(result, Err(DomainError::Forbidden(_))));
+    }
+
+    // ── get_bans ───────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_get_bans_success() {
+        let owner_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let mut mock_server_repo = MockServerRepository::new();
+        let mock_channel_repo = MockChannelRepository::new();
+
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |_, _| Ok(Some(make_member(owner_id, server_id, Role::Owner))));
+
+        mock_server_repo
+            .expect_find_bans_by_server()
+            .returning(|_| Ok(vec![]));
+
+        let service = ServerService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let result = service.get_bans(owner_id, server_id).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_get_bans_not_admin() {
+        let user_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let mut mock_server_repo = MockServerRepository::new();
+        let mock_channel_repo = MockChannelRepository::new();
+
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |_, _| Ok(Some(make_member(user_id, server_id, Role::Member))));
+
+        let service = ServerService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let result = service.get_bans(user_id, server_id).await;
+        assert!(matches!(result, Err(DomainError::Forbidden(_))));
+    }
+
+    // ── update_member_role ─────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_update_member_role_success() {
+        let owner_id = Uuid::new_v4();
+        let target_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let mut mock_server_repo = MockServerRepository::new();
+        let mock_channel_repo = MockChannelRepository::new();
+
+        mock_server_repo
+            .expect_find_member()
+            .times(2)
+            .returning(move |uid, _| {
+                if uid == owner_id {
+                    Ok(Some(make_member(owner_id, server_id, Role::Owner)))
+                } else {
+                    Ok(Some(make_member(target_id, server_id, Role::Member)))
+                }
+            });
+
+        let fixed_member_id = Uuid::new_v4();
+        let fixed_member_id_clone = fixed_member_id;
+        mock_server_repo
+            .expect_update_member_role()
+            .returning(move |_, _| {
+                let mut m = make_member(target_id, server_id, Role::Admin);
+                m.id = fixed_member_id;
+                Ok(m)
+            });
+
+        mock_server_repo
+            .expect_find_members_with_users()
+            .returning(move |_| Ok(vec![
+                crate::domain::repositories::server_repository::MemberWithUser {
+                    id: fixed_member_id_clone,
+                    user_id: target_id,
+                    server_id,
+                    role: Role::Admin,
+                    joined_at: Utc::now(),
+                    username: "bob".to_string(),
+                    avatar_url: None,
+                    status: "online".to_string(),
+                }
+            ]));
+
+        let service = ServerService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let result = service.update_member_role(owner_id, server_id, target_id, Role::Admin).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_update_member_role_not_owner() {
+        let user_id = Uuid::new_v4();
+        let target_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let mut mock_server_repo = MockServerRepository::new();
+        let mock_channel_repo = MockChannelRepository::new();
+
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |_, _| Ok(Some(make_member(user_id, server_id, Role::Admin))));
+
+        let service = ServerService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let result = service.update_member_role(user_id, server_id, target_id, Role::Member).await;
+        assert!(matches!(result, Err(DomainError::Forbidden(_))));
+    }
+
+    #[tokio::test]
+    async fn test_update_member_role_cannot_set_owner() {
+        let owner_id = Uuid::new_v4();
+        let target_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let mut mock_server_repo = MockServerRepository::new();
+        let mock_channel_repo = MockChannelRepository::new();
+
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |_, _| Ok(Some(make_member(owner_id, server_id, Role::Owner))));
+
+        let service = ServerService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let result = service.update_member_role(owner_id, server_id, target_id, Role::Owner).await;
+        assert!(matches!(result, Err(DomainError::Forbidden(_))));
+    }
+
+    #[tokio::test]
+    async fn test_update_member_role_cannot_change_owner_role() {
+        let owner_id = Uuid::new_v4();
+        let target_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let mut mock_server_repo = MockServerRepository::new();
+        let mock_channel_repo = MockChannelRepository::new();
+
+        // Requester is owner, target is also owner
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |uid, _| {
+                if uid == owner_id {
+                    Ok(Some(make_member(owner_id, server_id, Role::Owner)))
+                } else {
+                    Ok(Some(make_member(target_id, server_id, Role::Owner)))
+                }
+            });
+
+        let service = ServerService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let result = service.update_member_role(owner_id, server_id, target_id, Role::Admin).await;
+        assert!(matches!(result, Err(DomainError::Forbidden(_))));
+    }
+
+    #[tokio::test]
+    async fn test_join_server_own_invitation() {
+        let user_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let mut mock_server_repo = MockServerRepository::new();
+        let mock_channel_repo = MockChannelRepository::new();
+
+        mock_server_repo
+            .expect_find_invitation_by_code()
+            .returning(move |_| Ok(Some(make_invitation(server_id, user_id, true))));
+
+        let service = ServerService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let result = service.join_server(user_id, "MYCODE").await;
+        assert!(matches!(result, Err(DomainError::UseOwnInvitation)));
+    }
+
+    #[tokio::test]
+    async fn test_update_server_with_description_and_icon() {
+        let user_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let mut mock_server_repo = MockServerRepository::new();
+        let mock_channel_repo = MockChannelRepository::new();
+
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |_, _| Ok(Some(make_member(user_id, server_id, Role::Owner))));
+        mock_server_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(make_server(user_id))));
+        mock_server_repo
+            .expect_update()
+            .returning(move |_| Ok(make_server(user_id)));
+
+        let service = ServerService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let req = UpdateServerRequest {
+            name: None,
+            description: Some("A description".to_string()),
+            icon_url: Some("https://example.com/icon.png".to_string()),
+        };
+        let result = service.update_server(user_id, server_id, req).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_ban_member_admin_cannot_ban_admin() {
+        let admin_id = Uuid::new_v4();
+        let target_admin_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let mut mock_server_repo = MockServerRepository::new();
+        let mock_channel_repo = MockChannelRepository::new();
+
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |uid, _| {
+                if uid == admin_id {
+                    Ok(Some(make_member(admin_id, server_id, Role::Admin)))
+                } else {
+                    Ok(Some(make_member(target_admin_id, server_id, Role::Admin)))
+                }
+            });
+
+        let service = ServerService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let req = BanMemberRequest { duration_hours: Some(24) };
+        let result = service.ban_member(admin_id, server_id, target_admin_id, req).await;
+        assert!(matches!(result, Err(DomainError::Forbidden(_))));
+    }
+
+    #[tokio::test]
+    async fn test_transfer_ownership_not_owner() {
+        let user_id = Uuid::new_v4();
+        let new_owner_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let mut mock_server_repo = MockServerRepository::new();
+        let mock_channel_repo = MockChannelRepository::new();
+
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |_, _| Ok(Some(make_member(user_id, server_id, Role::Admin))));
+
+        let service = ServerService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let result = service.transfer_ownership(user_id, server_id, new_owner_id).await;
+        assert!(matches!(result, Err(DomainError::Forbidden(_))));
     }
 }

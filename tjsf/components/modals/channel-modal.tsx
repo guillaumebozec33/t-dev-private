@@ -50,7 +50,6 @@ export default function ChannelModal({
 }: CreateChannelModalProps) {
   const { selectedServer } = useSelectedServer();
   const [name, setName] = useState(isEdit ? channel?.name ?? "" : "");
-  const [isPrivate, setIsPrivate] = useState(channel?.is_private ?? false);
   const [selectedIcon, setSelectedIcon] = useState<string | null>(channel?.icon ?? null);
   const [showIconPicker, setShowIconPicker] = useState(false);
   const { t } = useTranslation();
@@ -58,9 +57,10 @@ export default function ChannelModal({
   const titleLabel = isEdit ? t("channelModal.titleEdit") : t("channelModal.titleCreate");
   const MAX_LENGTH = 20;
   const isOverLimit = name.length > MAX_LENGTH;
+  const [isPrivate, setIsPrivate] = useState(channel?.is_private ?? false);
+  const [channelType, setChannelType] = useState(channel?.channel_type ?? "text");
 
   const queryClient = useQueryClient();
-
   const mutation = useMutation({
     mutationFn: addChannels,
     onSuccess: () => {
@@ -79,8 +79,14 @@ export default function ChannelModal({
     if (isEdit && channel) {
       editMutation.mutate({ name, id: channel.id, is_private: isPrivate, icon: selectedIcon });
     } else {
-      if (!selectedServer) return;
-      mutation.mutate({ name, server_id: selectedServer.id, is_private: isPrivate, icon: selectedIcon });
+        if (!selectedServer) return;
+      mutation.mutate({
+        name: name,
+        server_id: selectedServer.id,
+        is_private: isPrivate,
+        channel_type: channelType,
+          icon: selectedIcon
+      });
     }
 
 
@@ -134,6 +140,38 @@ export default function ChannelModal({
               </p>
             )}
           </div>
+
+          {!isEdit && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {t("channelModal.typeLabel")}
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setChannelType("text")}
+                  className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                    channelType === "text"
+                      ? "border-bordeaux bg-bordeaux-light text-bordeaux"
+                      : "border-gray-300 text-gray-700 hover:border-gray-400"
+                  }`}
+                >
+                  {t("channelModal.textType")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChannelType("voice")}
+                  className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                    channelType === "voice"
+                      ? "border-bordeaux bg-bordeaux-light text-bordeaux"
+                      : "border-gray-300 text-gray-700 hover:border-gray-400"
+                  }`}
+                >
+                  {t("channelModal.voiceType")}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Icon picker */}
           <div>

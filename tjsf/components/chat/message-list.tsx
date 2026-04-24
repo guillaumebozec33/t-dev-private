@@ -326,6 +326,11 @@ export default function MessageList() {
   };
 
   useEffect(() => {
+    setMessageText("");
+    setEditingMessageId(null);
+  }, [selectedChannel?.id]);
+
+  useEffect(() => {
     return () => {
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);

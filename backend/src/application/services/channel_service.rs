@@ -195,7 +195,7 @@ mod tests {
         let req = CreateChannelRequest {
             name: "general".to_string(),
             description: None,
-            channel_type: None,
+            channel_type: Some("voice".to_string()),
             is_private: Some(false),
         };
 
@@ -221,7 +221,7 @@ mod tests {
         let req = CreateChannelRequest {
             name: "general".to_string(),
             description: None,
-            channel_type: None,
+            channel_type: Some("voice".to_string()),
             is_private: Some(false),
         };
 
@@ -249,7 +249,7 @@ mod tests {
         let req = CreateChannelRequest {
             name: "general".to_string(),
             description: None,
-            channel_type: None,
+            channel_type: Some("voice".to_string()),
             is_private: Some(false),
         };
 
@@ -349,5 +349,195 @@ mod tests {
         let service = ChannelService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
         let result = service.delete_channel(user_id, channel_id).await;
         assert!(matches!(result, Err(DomainError::Forbidden(_))));
+    }
+
+    // ── get_channel private ────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_get_channel_private_denied() {
+        let user_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let channel_id = Uuid::new_v4();
+
+        let mut mock_server_repo = MockServerRepository::new();
+        let mut mock_channel_repo = MockChannelRepository::new();
+
+        let mut private_channel = make_channel(server_id);
+        private_channel.is_private = true;
+
+        mock_channel_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(private_channel.clone())));
+
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |_, _| Ok(Some(make_member(user_id, server_id, Role::Member))));
+
+        let service = ChannelService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let result = service.get_channel(user_id, channel_id).await;
+        assert!(matches!(result, Err(DomainError::Forbidden(_))));
+    }
+
+    // ── update_channel ─────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_update_channel_success() {
+        let user_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let channel_id = Uuid::new_v4();
+
+        let mut mock_server_repo = MockServerRepository::new();
+        let mut mock_channel_repo = MockChannelRepository::new();
+
+        mock_channel_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(make_channel(server_id))));
+
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |_, _| Ok(Some(make_member(user_id, server_id, Role::Admin))));
+
+        mock_channel_repo
+            .expect_update()
+            .returning(move |c| Ok(c.clone()));
+
+        let service = ChannelService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let req = UpdateChannelRequest {
+            name: Some("nouveau-nom".to_string()),
+            description: None,
+            position: None,
+            is_private: None,
+        };
+        let result = service.update_channel(user_id, channel_id, req).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_update_channel_not_admin() {
+        let user_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let channel_id = Uuid::new_v4();
+
+        let mut mock_server_repo = MockServerRepository::new();
+        let mut mock_channel_repo = MockChannelRepository::new();
+
+        mock_channel_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(make_channel(server_id))));
+
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |_, _| Ok(Some(make_member(user_id, server_id, Role::Member))));
+
+        let service = ChannelService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let req = UpdateChannelRequest {
+            name: Some("nom".to_string()),
+            description: None,
+            position: None,
+            is_private: None,
+        };
+        let result = service.update_channel(user_id, channel_id, req).await;
+        assert!(matches!(result, Err(DomainError::Forbidden(_))));
+    }
+
+    // ── get_channels ───────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_get_channels_member_sees_only_public() {
+        let user_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+
+        let mut mock_server_repo = MockServerRepository::new();
+        let mut mock_channel_repo = MockChannelRepository::new();
+
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |_, _| Ok(Some(make_member(user_id, server_id, Role::Member))));
+
+        let mut private_ch = make_channel(server_id);
+        private_ch.is_private = true;
+        let public_ch = make_channel(server_id);
+
+        mock_channel_repo
+            .expect_find_by_server_id()
+            .returning(move |_| Ok(vec![public_ch.clone(), private_ch.clone()]));
+
+        let service = ChannelService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let result = service.get_channels(user_id, server_id).await.unwrap();
+        assert_eq!(result.len(), 1); // only public
+    }
+
+    #[tokio::test]
+    async fn test_get_channels_not_member() {
+        let user_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+
+        let mut mock_server_repo = MockServerRepository::new();
+        let mock_channel_repo = MockChannelRepository::new();
+
+        mock_server_repo
+            .expect_find_member()
+            .returning(|_, _| Ok(None));
+
+        let service = ChannelService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let result = service.get_channels(user_id, server_id).await;
+        assert!(matches!(result, Err(DomainError::Forbidden(_))));
+    }
+
+    #[tokio::test]
+    async fn test_update_channel_all_optional_fields() {
+        let user_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let channel_id = Uuid::new_v4();
+
+        let mut mock_server_repo = MockServerRepository::new();
+        let mut mock_channel_repo = MockChannelRepository::new();
+
+        mock_channel_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(make_channel(server_id))));
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |_, _| Ok(Some(make_member(user_id, server_id, Role::Admin))));
+        mock_channel_repo
+            .expect_update()
+            .returning(move |c| Ok(c.clone()));
+
+        let service = ChannelService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let req = UpdateChannelRequest {
+            name: Some("new".to_string()),
+            description: Some("desc".to_string()),
+            position: Some(2),
+            is_private: Some(true),
+        };
+        let result = service.update_channel(user_id, channel_id, req).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_create_channel_with_channel_type() {
+        let user_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+
+        let mut mock_server_repo = MockServerRepository::new();
+        let mut mock_channel_repo = MockChannelRepository::new();
+
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |_, _| Ok(Some(make_member(user_id, server_id, Role::Admin))));
+        mock_channel_repo
+            .expect_create()
+            .returning(move |_| Ok(make_channel(server_id)));
+
+        let service = ChannelService::new(Arc::new(mock_server_repo), Arc::new(mock_channel_repo));
+        let req = CreateChannelRequest {
+            name: "voice".to_string(),
+            description: None,
+            channel_type: Some("voice".to_string()),
+            is_private: None,
+        };
+
+        let result = service.create_channel(user_id, server_id, req).await;
+        assert!(result.is_ok());
     }
 }

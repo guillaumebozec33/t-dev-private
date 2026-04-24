@@ -122,7 +122,7 @@ export default function RegisterForm() {
             </div>
           )}
 
-          <Button type="submit">{t("auth.register.submit")}</Button>
+          <Button type="submit" className="cursor-pointer">{t("auth.register.submit")}</Button>
 
           <p className="text-xs text-gray-600">
             {t("auth.register.termsPrefix")}{" "}

@@ -1,0 +1,23 @@
+stages:
+  - test
+
+variables:
+  CARGO_TERM_COLOR: always
+
+backend_tests:
+  stage: test
+  image: rust:1.88
+  before_script:
+    - apt-get update -y
+    - apt-get install -y libssl-dev pkg-config
+  script:
+    - cd backend
+    - cargo test --all
+
+frontend_build:
+  stage: test
+  image: node:20
+  script:
+    - cd tjsf
+    - npm ci
+    - npm run build

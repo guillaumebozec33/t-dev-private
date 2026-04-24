@@ -27,7 +27,7 @@ export default function Home() {
 
         <div className="space-y-4">
           <Link href="/register">
-            <Button className="text-lg py-3">{t("home.createAccount")}</Button>
+            <Button className="text-lg py-3 cursor-pointer">{t("home.createAccount")}</Button>
           </Link>
 
           <p className="text-gray-600">

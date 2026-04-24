@@ -3,9 +3,19 @@
 import { useTypingIndicator } from "@/hooks";
 import { useTranslation } from "@/lib/i18n/language-context";
 
-export function TypingIndicator() {
-  const { typingUsers } = useTypingIndicator();
+interface TypingUser {
+  user_id: string;
+  username: string;
+}
+
+interface TypingIndicatorProps {
+  typingUsers?: TypingUser[];
+}
+
+export function TypingIndicator({ typingUsers: externalTypingUsers }: TypingIndicatorProps = {}) {
+  const { typingUsers: channelTypingUsers } = useTypingIndicator();
   const { t } = useTranslation();
+  const typingUsers = externalTypingUsers ?? channelTypingUsers;
 
   if (typingUsers.length === 0) return null;
 

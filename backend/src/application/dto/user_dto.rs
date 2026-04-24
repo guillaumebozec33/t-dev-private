@@ -46,6 +46,18 @@ mod tests {
     use crate::domain::enums::UserStatus;
 
     #[test]
+    fn test_deserialize_optional_nullable_null() {
+        let req: UpdateUserRequest = serde_json::from_str(r#"{"avatar_url": null}"#).unwrap();
+        assert_eq!(req.avatar_url, Some(None));
+    }
+
+    #[test]
+    fn test_deserialize_optional_nullable_value() {
+        let req: UpdateUserRequest = serde_json::from_str(r#"{"avatar_url": "https://example.com/img.png"}"#).unwrap();
+        assert_eq!(req.avatar_url, Some(Some("https://example.com/img.png".to_string())));
+    }
+
+    #[test]
     fn test_user_from(){
         let user_id = Uuid::new_v4();
         let user_test = User{

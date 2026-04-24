@@ -4,11 +4,19 @@ use utoipa::ToSchema;
 
 use crate::domain::entities::Channel;
 
+fn validate_channel_type(channel_type: &str) -> Result<(), validator::ValidationError> {
+    match channel_type {
+        "text" | "voice" => Ok(()),
+        _ => Err(validator::ValidationError::new("invalid_channel_type")),
+    }
+}
+
 #[derive(Debug, Deserialize, Validate,ToSchema)]
 pub struct CreateChannelRequest {
     #[validate(length(min = 1, max = 100))]
     pub name: String,
     pub description: Option<String>,
+    #[validate(custom(function = "validate_channel_type"))]
     pub channel_type: Option<String>,
     pub is_private: Option<bool>,
     pub icon: Option<String>,
@@ -66,10 +74,22 @@ mod tests {
         let req = CreateChannelRequest {
             name: "channel1".to_string(),
             description: Some("Ceci est une description".to_string()),
-            channel_type: Some("textuel".to_string()),
+            channel_type: Some("voice".to_string()),
             is_private: Some(false),
         };
         assert!(req.validate().is_ok());
+    }
+
+    #[test]
+    fn test_create_channel_invalid_type() {
+        let req = CreateChannelRequest {
+            name: "channel1".to_string(),
+            description: None,
+            channel_type: Some("video".to_string()),
+            is_private: Some(false),
+        };
+
+        assert!(req.validate().is_err());
     }
 
     #[test]
@@ -81,7 +101,7 @@ mod tests {
             server_id: server_id,
             name: "channel1".to_string(),
             description: Some("Ceci est une description".to_string()),
-            channel_type: "textuel".to_string(),
+            channel_type: "voice".to_string(),
             position: 1,
             is_private: false,
             icon: None,
@@ -95,7 +115,7 @@ mod tests {
         assert_eq!(channel_dto.server_id, server_id.to_string());
         assert_eq!(channel_dto.name, "channel1".to_string());
         assert_eq!(channel_dto.description, Some("Ceci est une description".to_string()));
-        assert_eq!(channel_dto.channel_type, "textuel");
+        assert_eq!(channel_dto.channel_type, "voice");
         assert_eq!(channel_dto.position, 1);
         }
     }

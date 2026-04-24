@@ -8,6 +8,8 @@ import { Channel, Member, Message } from '@/types';
 import {useAuthStore} from "@/lib/store/auth-store";
 import {useTranslation} from "@/lib/i18n/language-context";
 import {useSelectedServer} from "@/hooks";
+import {useServerStore} from "@/lib/store/server-store";
+import {useChannelStore} from "@/lib/store/channel-store";
 
 export function useMemberSync() {
     const {selectedServer} = useSelectedServer()
@@ -15,6 +17,43 @@ export function useMemberSync() {
   const queryClient = useQueryClient();
   const user = useAuthStore.getState().user
     const {t} = useTranslation()
+
+  // Global listener: handles kick/ban of the current user regardless of selected server
+  useEffect(() => {
+    if (!socket || !isConnected || !user) return;
+
+    const handleSelfKicked = (data: { server_id: string; member_id: string }) => {
+      if (data.member_id !== user.id) return;
+      alert(t("sanction.kick"));
+      queryClient.invalidateQueries({ queryKey: ['servers'] });
+      queryClient.invalidateQueries({ queryKey: ['members', data.server_id] });
+      queryClient.invalidateQueries({ queryKey: ['channels', data.server_id] });
+      if (useServerStore.getState().selectedServerId === data.server_id) {
+        useServerStore.getState().resetSelectedServerId();
+        useChannelStore.getState().resetSelectedChannelId();
+      }
+    };
+
+    const handleSelfBanned = (data: { server_id: string; member_id: string }) => {
+      if (data.member_id !== user.id) return;
+      alert(t("sanction.ban"));
+      queryClient.invalidateQueries({ queryKey: ['servers'] });
+      queryClient.invalidateQueries({ queryKey: ['members', data.server_id] });
+      queryClient.invalidateQueries({ queryKey: ['channels', data.server_id] });
+      if (useServerStore.getState().selectedServerId === data.server_id) {
+        useServerStore.getState().resetSelectedServerId();
+        useChannelStore.getState().resetSelectedChannelId();
+      }
+    };
+
+    socket.on(SOCKET_EVENTS_LISTEN.MEMBER_KICKED, handleSelfKicked);
+    socket.on(SOCKET_EVENTS_LISTEN.MEMBER_BANNED, handleSelfBanned);
+
+    return () => {
+      socket.off(SOCKET_EVENTS_LISTEN.MEMBER_KICKED, handleSelfKicked);
+      socket.off(SOCKET_EVENTS_LISTEN.MEMBER_BANNED, handleSelfBanned);
+    };
+  }, [socket, isConnected, user, queryClient, t]);
 
   useEffect(() => {
     if (!socket || !isConnected || !selectedServer?.id) return;
@@ -69,45 +108,31 @@ export function useMemberSync() {
       }
     };
       const handleMemberKicked = (data: { server_id: string; member_id: string }) => {
-          if (data.server_id === selectedServer?.id) {
-              if (data.member_id === user?.id) {
-                  alert(t("sanction.kick"));
-                  queryClient.invalidateQueries({ queryKey: ['servers'] });
-                  queryClient.invalidateQueries({ queryKey: ['members', selectedServer?.id] });
-                  queryClient.invalidateQueries({ queryKey: ['channels', selectedServer?.id] });
-              } else {
-                  const members = queryClient.getQueryData<Member[]>(['members', selectedServer?.id]);
-                  const kickedMember = members?.find((m: Member) => m.user_id === data.member_id);
-                  queryClient.setQueryData<Member[]>(
-                      ['members', selectedServer?.id],
-                      (old = []) => old.filter((m) => m.user_id !== data.member_id)
-                  );
-                  const firstChannelId = getFirstChannelId(selectedServer?.id);
-                  if (firstChannelId && kickedMember) {
-                      injectSystemMessage(firstChannelId, 'kicked', kickedMember.username);
-                  }
+          if (data.server_id === selectedServer?.id && data.member_id !== user?.id) {
+              const members = queryClient.getQueryData<Member[]>(['members', selectedServer?.id]);
+              const kickedMember = members?.find((m: Member) => m.user_id === data.member_id);
+              queryClient.setQueryData<Member[]>(
+                  ['members', selectedServer?.id],
+                  (old = []) => old.filter((m) => m.user_id !== data.member_id)
+              );
+              const firstChannelId = getFirstChannelId(selectedServer?.id);
+              if (firstChannelId && kickedMember) {
+                  injectSystemMessage(firstChannelId, 'kicked', kickedMember.username);
               }
           }
       };
 
       const handleMemberBanned = (data: { server_id: string; member_id: string }) => {
-          if (data.server_id === selectedServer?.id) {
-              if (data.member_id === user?.id) {
-                  alert(t("sanction.ban"));
-                  queryClient.invalidateQueries({ queryKey: ['servers'] });
-                  queryClient.invalidateQueries({ queryKey: ['members', selectedServer?.id] });
-                  queryClient.invalidateQueries({ queryKey: ['channels', selectedServer?.id] });
-              } else {
-                  const members = queryClient.getQueryData<Member[]>(['members', selectedServer?.id]);
-                  const bannedMember = members?.find((m: Member) => m.user_id === data.member_id);
-                  queryClient.setQueryData<Member[]>(
-                      ['members', selectedServer?.id],
-                      (old = []) => old.filter((m) => m.user_id !== data.member_id)
-                  );
-                  const firstChannelId = getFirstChannelId(selectedServer?.id);
-                  if (firstChannelId && bannedMember) {
-                      injectSystemMessage(firstChannelId, 'banned', bannedMember.username);
-                  }
+          if (data.server_id === selectedServer?.id && data.member_id !== user?.id) {
+              const members = queryClient.getQueryData<Member[]>(['members', selectedServer?.id]);
+              const bannedMember = members?.find((m: Member) => m.user_id === data.member_id);
+              queryClient.setQueryData<Member[]>(
+                  ['members', selectedServer?.id],
+                  (old = []) => old.filter((m) => m.user_id !== data.member_id)
+              );
+              const firstChannelId = getFirstChannelId(selectedServer?.id);
+              if (firstChannelId && bannedMember) {
+                  injectSystemMessage(firstChannelId, 'banned', bannedMember.username);
               }
           }
       };

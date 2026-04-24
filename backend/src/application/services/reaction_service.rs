@@ -260,4 +260,47 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(result.unwrap().len(), 0);
     }
+
+    // ── get_reactions_for_messages ─────────────────────────────
+
+    #[tokio::test]
+    async fn test_get_reactions_for_messages_success() {
+        let user_id = Uuid::new_v4();
+        let message_id = Uuid::new_v4();
+
+        let mut mock_reaction_repo = MockReactionRepository::new();
+        let mut mock_user_repo = MockUserRepository::new();
+
+        mock_reaction_repo
+            .expect_find_by_message_ids()
+            .returning(move |_| Ok(vec![make_reaction(message_id, user_id, "👍")]));
+
+        mock_user_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(make_user(user_id))));
+
+        let service = ReactionService::new(Arc::new(mock_reaction_repo), Arc::new(mock_user_repo));
+        let result = service.get_reactions_for_messages(&[message_id]).await;
+
+        assert!(result.is_ok());
+        let reactions = result.unwrap();
+        assert_eq!(reactions.len(), 1);
+        assert_eq!(reactions[0].username, Some("alice".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_get_reactions_for_messages_vide() {
+        let message_id = Uuid::new_v4();
+
+        let mut mock_reaction_repo = MockReactionRepository::new();
+        mock_reaction_repo
+            .expect_find_by_message_ids()
+            .returning(|_| Ok(vec![]));
+
+        let service = ReactionService::new(Arc::new(mock_reaction_repo), Arc::new(MockUserRepository::new()));
+        let result = service.get_reactions_for_messages(&[message_id]).await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 0);
+    }
 }

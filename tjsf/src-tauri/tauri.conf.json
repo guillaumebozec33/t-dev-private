@@ -15,8 +15,9 @@
         "title": "RTC-Chat",
         "width": 800,
         "height": 600,
-        "resizable": false,
-        "fullscreen": true
+        "resizable": true,
+        "maximized": true,
+        "fullscreen": false
       }
     ],
     "withGlobalTauri": true,

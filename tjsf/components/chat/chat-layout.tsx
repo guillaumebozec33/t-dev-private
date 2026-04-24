@@ -7,6 +7,7 @@ import MessageList from "@/components/chat/message-list";
 import MembersList from "@/components/chat/members-list";
 import DmView from "@/components/chat/dm-view";
 import DmConversationList from "@/components/chat/dm-conversation-list";
+import VoiceChannelView from "@/components/chat/voice-channel-view";
 import { Menu, Users } from "lucide-react";
 import { useAuthStore} from "@/lib/store/auth-store";
 import Profile from "@/components/chat/profile";
@@ -55,6 +56,7 @@ export default function ChatLayout({
     const {selectedConversation} = useSelectedDmConversation();
   const {conversations} = useDmConversations()
     const {dmMessages} = useDmMessages();
+  const isVoiceChannel = selectedChannel?.channel_type === "voice";
 
   const handleServerSelect = (serverId: string) => {
     onServerSelect(serverId);
@@ -172,6 +174,10 @@ export default function ChatLayout({
                 conversations.find((c) => c.id === selectedConversation?.id)
                   ?.other_username
               }
+              otherUserId={
+                conversations.find((c) => c.id === selectedConversation?.id)
+                  ?.other_user_id
+              }
             />
           ) : isDmInboxOpen ? (
             <DmConversationList
@@ -185,7 +191,7 @@ export default function ChatLayout({
               onChannelSelect={handleChannelSelect}
             />
           ) : selectedChannel?.id && user ? (
-            <MessageList/>
+            isVoiceChannel ? <VoiceChannelView /> : <MessageList/>
           ) : !selectedServer?.id ? (
             <div className="flex-1 flex items-center justify-center bg-white h-full">
               <div className="text-center text-gray-400 px-4">
@@ -271,13 +277,17 @@ export default function ChatLayout({
                 conversations.find((c) => c.id === selectedConversation?.id)
                   ?.other_username
               }
+              otherUserId={
+                conversations.find((c) => c.id === selectedConversation?.id)
+                  ?.other_user_id
+              }
             />
           </div>
         )}
 
         {selectedChannel?.id && !selectedConversation?.id && user && (
           <div className="flex-1 flex">
-            <MessageList/>
+            {isVoiceChannel ? <VoiceChannelView /> : <MessageList/>}
           </div>
         )}
       </div>
@@ -347,11 +357,15 @@ export default function ChatLayout({
             conversations.find((c) => c.id === selectedConversation?.id)
               ?.other_username
           }
+          otherUserId={
+            conversations.find((c) => c.id === selectedConversation?.id)
+              ?.other_user_id
+          }
         />
       )}
 
       {selectedChannel?.id && !selectedConversation?.id && user && (
-        <MessageList/>
+        isVoiceChannel ? <VoiceChannelView /> : <MessageList/>
       )}
 
       {selectedServer?.id && (

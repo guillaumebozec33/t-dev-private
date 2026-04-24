@@ -466,6 +466,77 @@ mod tests {
         assert!(result.is_ok());
     }
 
+    // ── send_message private channel ──────────────────────────
+
+    #[tokio::test]
+    async fn test_send_message_private_channel_forbidden() {
+        let user_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let channel_id = Uuid::new_v4();
+
+        let mut mock_channel_repo = MockChannelRepository::new();
+        let mut mock_server_repo = MockServerRepository::new();
+        let mock_message_repo = MockMessageRepository::new();
+        let mock_user_repo = MockUserRepository::new();
+
+        mock_channel_repo
+            .expect_find_by_id()
+            .returning(move |_| {
+                let mut ch = make_channel(server_id);
+                ch.is_private = true;
+                Ok(Some(ch))
+            });
+
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |_, _| Ok(Some(make_member(user_id, server_id, Role::Member))));
+
+        let service = MessageService::new(
+            Arc::new(mock_server_repo),
+            Arc::new(mock_channel_repo),
+            Arc::new(mock_message_repo),
+            Arc::new(mock_user_repo),
+        );
+
+        let req = CreateMessageRequest { content: "Hello !".to_string() };
+        let result = service.send_message(user_id, channel_id, req).await;
+        assert!(matches!(result, Err(DomainError::Forbidden(_))));
+    }
+
+    #[tokio::test]
+    async fn test_get_messages_private_channel_forbidden() {
+        let user_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let channel_id = Uuid::new_v4();
+
+        let mut mock_channel_repo = MockChannelRepository::new();
+        let mut mock_server_repo = MockServerRepository::new();
+        let mock_message_repo = MockMessageRepository::new();
+        let mock_user_repo = MockUserRepository::new();
+
+        mock_channel_repo
+            .expect_find_by_id()
+            .returning(move |_| {
+                let mut ch = make_channel(server_id);
+                ch.is_private = true;
+                Ok(Some(ch))
+            });
+
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |_, _| Ok(Some(make_member(user_id, server_id, Role::Member))));
+
+        let service = MessageService::new(
+            Arc::new(mock_server_repo),
+            Arc::new(mock_channel_repo),
+            Arc::new(mock_message_repo),
+            Arc::new(mock_user_repo),
+        );
+
+        let result = service.get_messages(user_id, channel_id, 50, None).await;
+        assert!(matches!(result, Err(DomainError::Forbidden(_))));
+    }
+
     // Cas 2 : tente d'éditer le message d'un autre → Forbidden
     #[tokio::test]
     async fn test_edit_message_not_author() {

@@ -15,6 +15,12 @@ pub enum SocketEvent {
     #[serde(rename = "leave_channel")]
     LeaveChannel { channel_id: String },
 
+    #[serde(rename = "join_voice_channel")]
+    JoinVoiceChannel { channel_id: String },
+
+    #[serde(rename = "leave_voice_channel")]
+    LeaveVoiceChannel { channel_id: String },
+
     #[serde(rename = "member_kicked")]
     MemberKicked { 
         server_id: String,

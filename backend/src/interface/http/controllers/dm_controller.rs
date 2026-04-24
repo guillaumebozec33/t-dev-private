@@ -345,6 +345,106 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
     }
 
+    #[tokio::test]
+    async fn test_get_dm_messages_with_limit() {
+        let user_id = Uuid::new_v4();
+        let other_id = Uuid::new_v4();
+        let conv_id = Uuid::new_v4();
+        let before_id = Uuid::new_v4();
+        let settings = make_settings();
+        let token = make_token(user_id, &settings);
+
+        let mut mock_user_repo = MockUserRepository::new();
+        let mut mock_dm_repo = MockDmRepository::new();
+
+        mock_user_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(make_user(user_id))));
+
+        mock_dm_repo
+            .expect_find_conversation_by_id()
+            .returning(move |_| Ok(Some(make_conversation(user_id, other_id))));
+
+        mock_dm_repo
+            .expect_find_messages_by_conversation()
+            .returning(move |_, _, _| Ok(vec![]));
+
+        let app = make_router(mock_user_repo, mock_dm_repo);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(format!("/dm/conversations/{}/messages?limit=10&before={}", conv_id, before_id))
+                    .header(header::AUTHORIZATION, format!("Bearer {}", token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    // ── socket.io send_dm ──────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_send_dm_with_socket_io() {
+        let user_id = Uuid::new_v4();
+        let other_id = Uuid::new_v4();
+        let conv_id = Uuid::new_v4();
+        let settings = make_settings();
+        let token = make_token(user_id, &settings);
+
+        let mut mock_user_repo = MockUserRepository::new();
+        let mut mock_dm_repo = MockDmRepository::new();
+
+        mock_user_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(make_user(user_id))));
+
+        mock_dm_repo
+            .expect_find_conversation_by_id()
+            .returning(move |_| Ok(Some(make_conversation(user_id, other_id))));
+
+        mock_dm_repo
+            .expect_create_dm_message()
+            .returning(move |_| Ok(make_dm(conv_id, user_id)));
+
+        let base_state = AppState::new_for_test_full(
+            Arc::new(mock_user_repo),
+            Arc::new(MockServerRepository::new()),
+            Arc::new(MockChannelRepository::new()),
+            Arc::new(MockMessageRepository::new()),
+            Arc::new(mock_dm_repo),
+            Arc::new(MockReactionRepository::new()),
+            make_settings(),
+        );
+        let (_, io) = socketioxide::SocketIo::new_layer();
+        io.ns("/", |_: socketioxide::extract::SocketRef| {});
+        let state = base_state.with_socket_io(io);
+
+        let app = Router::new()
+            .route("/dm/conversations/:id/messages", axum::routing::post(send_dm))
+            .layer(axum::middleware::from_fn_with_state(state.clone(), crate::interface::http::middleware::auth_middleware))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/dm/conversations/{}/messages", conv_id))
+                    .header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token))
+                    .header(axum::http::header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(serde_json::json!({ "content": "Hello !" }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
     // ── auth ───────────────────────────────────────────────────
 
     #[tokio::test]

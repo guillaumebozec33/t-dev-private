@@ -195,12 +195,18 @@ mod tests {
     use uuid::Uuid;
     use chrono::Utc;
 
-    use crate::domain::entities::User;
+    use crate::domain::entities::{User, Server, Conversation};
     use crate::domain::enums::UserStatus;
     use crate::domain::repositories::server_repository::MockServerRepository;
     use crate::domain::repositories::channel_repository::MockChannelRepository;
     use crate::domain::repositories::message_repository::MockMessageRepository;
     use crate::domain::repositories::user_repository::MockUserRepository;
+    use crate::domain::repositories::dm_repository::MockDmRepository;
+    use crate::domain::repositories::reaction_repository::MockReactionRepository;
+    use crate::infrastructure::security::create_token;
+    use axum::http::header;
+    use axum::middleware;
+    use crate::interface::http::middleware::auth_middleware;
     use crate::config::Settings;
     use crate::shared::app_state::AppState;
 
@@ -230,21 +236,30 @@ mod tests {
         }
     }
 
+    fn make_token(user_id: Uuid, settings: &Settings) -> String {
+        create_token(user_id, &settings.jwt_secret, settings.jwt_expiration).unwrap()
+    }
+
     // Crée un routeur de test avec les mocks injectés
     fn make_router(user_repo: MockUserRepository) -> Router {
+        let settings = make_settings();
         let state = AppState::new_for_test(
             Arc::new(user_repo),
             Arc::new(MockServerRepository::new()),
             Arc::new(MockChannelRepository::new()),
             Arc::new(MockMessageRepository::new()),
-            make_settings(),
+            settings,
         );
 
-        // Monte uniquement les routes auth pour ces tests
+        let protected = Router::new()
+            .route("/me", axum::routing::get(me))
+            .route("/me", axum::routing::patch(update_me))
+            .layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
+
         Router::new()
             .route("/auth/signup", axum::routing::post(signup))
             .route("/auth/login", axum::routing::post(login))
-//             .route("/auth/logout", axum::routing::post(logout))
+            .merge(protected)
             .with_state(state)
     }
 
@@ -366,7 +381,387 @@ mod tests {
             .await
             .unwrap();
 
-        // InvalidCredentials → doit retourner 401
         assert_ne!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_login_validation_error() {
+        let app = make_router(MockUserRepository::new());
+
+        let response: axum::response::Response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/auth/login")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(json!({
+                        "email": "pasunemail",
+                        "password": "court"
+                    }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_ne!(response.status(), StatusCode::OK);
+    }
+
+    // ── GET /me ────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_me_success() {
+        let user = make_user();
+        let settings = make_settings();
+        let token = make_token(user.id, &settings);
+        let user_clone = user.clone();
+
+        let mut mock_user_repo = MockUserRepository::new();
+        mock_user_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(user_clone.clone())));
+
+        let app = make_router(mock_user_repo);
+
+        let response: axum::response::Response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/me")
+                    .header(header::AUTHORIZATION, format!("Bearer {}", token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_me_unauthorized() {
+        let app = make_router(MockUserRepository::new());
+
+        let response: axum::response::Response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/me")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    // ── PATCH /me ──────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_update_me_username() {
+        let user = make_user();
+        let settings = make_settings();
+        let token = make_token(user.id, &settings);
+        let user_clone = user.clone();
+
+        let mut mock_user_repo = MockUserRepository::new();
+        mock_user_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(user_clone.clone())));
+        mock_user_repo
+            .expect_update()
+            .returning(move |u| Ok(u.clone()));
+
+        let app = make_router(mock_user_repo);
+
+        let response: axum::response::Response = app
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri("/me")
+                    .header(header::AUTHORIZATION, format!("Bearer {}", token))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(json!({ "username": "nouveau_nom" }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_update_me_status() {
+        let user = make_user();
+        let settings = make_settings();
+        let token = make_token(user.id, &settings);
+        let user_clone = user.clone();
+
+        let mut mock_user_repo = MockUserRepository::new();
+        mock_user_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(user_clone.clone())));
+        mock_user_repo
+            .expect_update()
+            .returning(move |u| Ok(u.clone()));
+
+        let app = make_router(mock_user_repo);
+
+        let response: axum::response::Response = app
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri("/me")
+                    .header(header::AUTHORIZATION, format!("Bearer {}", token))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(json!({ "status": "away" }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_update_me_status_online() {
+        let user = make_user();
+        let settings = make_settings();
+        let token = make_token(user.id, &settings);
+        let user_clone = user.clone();
+
+        let mut mock_user_repo = MockUserRepository::new();
+        mock_user_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(user_clone.clone())));
+        mock_user_repo
+            .expect_update()
+            .returning(move |u| Ok(u.clone()));
+
+        let app = make_router(mock_user_repo);
+
+        let response: axum::response::Response = app
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri("/me")
+                    .header(header::AUTHORIZATION, format!("Bearer {}", token))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(json!({ "status": "online" }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_update_me_status_dnd() {
+        let user = make_user();
+        let settings = make_settings();
+        let token = make_token(user.id, &settings);
+        let user_clone = user.clone();
+
+        let mut mock_user_repo = MockUserRepository::new();
+        mock_user_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(user_clone.clone())));
+        mock_user_repo
+            .expect_update()
+            .returning(move |u| Ok(u.clone()));
+
+        let app = make_router(mock_user_repo);
+
+        let response: axum::response::Response = app
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri("/me")
+                    .header(header::AUTHORIZATION, format!("Bearer {}", token))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(json!({ "status": "dnd" }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_update_me_status_invisible() {
+        let user = make_user();
+        let settings = make_settings();
+        let token = make_token(user.id, &settings);
+        let user_clone = user.clone();
+
+        let mut mock_user_repo = MockUserRepository::new();
+        mock_user_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(user_clone.clone())));
+        mock_user_repo
+            .expect_update()
+            .returning(move |u| Ok(u.clone()));
+
+        let app = make_router(mock_user_repo);
+
+        let response: axum::response::Response = app
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri("/me")
+                    .header(header::AUTHORIZATION, format!("Bearer {}", token))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(json!({ "status": "invisible" }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_update_me_avatar_url() {
+        let user = make_user();
+        let settings = make_settings();
+        let token = make_token(user.id, &settings);
+        let user_clone = user.clone();
+
+        let mut mock_user_repo = MockUserRepository::new();
+        mock_user_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(user_clone.clone())));
+        mock_user_repo
+            .expect_update()
+            .returning(move |u| Ok(u.clone()));
+
+        let app = make_router(mock_user_repo);
+
+        let response: axum::response::Response = app
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri("/me")
+                    .header(header::AUTHORIZATION, format!("Bearer {}", token))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(json!({ "avatar_url": null }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_update_me_status_invalide() {
+        let user = make_user();
+        let settings = make_settings();
+        let token = make_token(user.id, &settings);
+        let user_clone = user.clone();
+
+        let mut mock_user_repo = MockUserRepository::new();
+        mock_user_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(user_clone.clone())));
+
+        let app = make_router(mock_user_repo);
+
+        let response: axum::response::Response = app
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri("/me")
+                    .header(header::AUTHORIZATION, format!("Bearer {}", token))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(json!({ "status": "statut_invalide" }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_ne!(response.status(), StatusCode::OK);
+    }
+
+    // ── socket.io variant for update_me ───────────────────────
+
+    #[tokio::test]
+    async fn test_update_me_with_socket_io() {
+        let user = make_user();
+        let settings = make_settings();
+        let token = make_token(user.id, &settings);
+        let server_id = Uuid::new_v4();
+        let other_user_id = Uuid::new_v4();
+        let user_clone = user.clone();
+        let user_clone2 = user.clone();
+
+        let mut mock_user_repo = MockUserRepository::new();
+        mock_user_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(user_clone.clone())));
+        mock_user_repo
+            .expect_update()
+            .returning(move |u| Ok(u.clone()));
+
+        let mut mock_server_repo = MockServerRepository::new();
+        mock_server_repo
+            .expect_find_by_user_id()
+            .returning(move |_| Ok(vec![Server {
+                id: server_id,
+                name: "test".to_string(),
+                description: None,
+                icon_url: None,
+                owner_id: user_clone2.id,
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            }]));
+
+        let mut mock_dm_repo = MockDmRepository::new();
+        mock_dm_repo
+            .expect_find_conversations_by_user()
+            .returning(move |uid| Ok(vec![Conversation {
+                id: Uuid::new_v4(),
+                user1_id: uid,
+                user2_id: other_user_id,
+                created_at: Utc::now(),
+            }]));
+
+        let base_state = AppState::new_for_test_full(
+            Arc::new(mock_user_repo),
+            Arc::new(mock_server_repo),
+            Arc::new(MockChannelRepository::new()),
+            Arc::new(MockMessageRepository::new()),
+            Arc::new(mock_dm_repo),
+            Arc::new(MockReactionRepository::new()),
+            make_settings(),
+        );
+        let (_, io) = socketioxide::SocketIo::new_layer();
+        io.ns("/", |_: socketioxide::extract::SocketRef| {});
+        let state = base_state.with_socket_io(io);
+
+        let protected = Router::new()
+            .route("/me", axum::routing::patch(update_me))
+            .layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
+
+        let app = Router::new()
+            .merge(protected)
+            .with_state(state);
+
+        let response: axum::response::Response = app
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri("/me")
+                    .header(header::AUTHORIZATION, format!("Bearer {}", token))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(json!({ "status": "online" }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }

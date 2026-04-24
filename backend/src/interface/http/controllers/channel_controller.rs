@@ -415,6 +415,49 @@ mod tests {
         assert_ne!(response.status(), StatusCode::OK);
     }
 
+    // ── update_channel ─────────────────────────────────────────
+
+    #[tokio::test]
+    async fn test_update_channel_success() {
+        let user_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let channel_id = Uuid::new_v4();
+        let settings = make_settings();
+        let token = make_token(user_id, &settings);
+
+        let mut mock_server_repo = MockServerRepository::new();
+        let mut mock_channel_repo = MockChannelRepository::new();
+
+        mock_channel_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(make_channel(server_id))));
+
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |_, _| Ok(Some(make_member(user_id, server_id))));
+
+        mock_channel_repo
+            .expect_update()
+            .returning(move |_| Ok(make_channel(server_id)));
+
+        let app = make_router(mock_server_repo, mock_channel_repo);
+
+        let response: axum::response::Response = app
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri(format!("/channels/{}", channel_id))
+                    .header(header::AUTHORIZATION, format!("Bearer {}", token))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(json!({ "name": "nouveau-nom" }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
     // ── delete_channel ─────────────────────────────────────────
 
     #[tokio::test]
@@ -442,6 +485,152 @@ mod tests {
             .returning(|_| Ok(()));
 
         let app = make_router(mock_server_repo, mock_channel_repo);
+
+        let response: axum::response::Response = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri(format!("/channels/{}", channel_id))
+                    .header(header::AUTHORIZATION, format!("Bearer {}", token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
+
+    // ── socket.io variant tests ────────────────────────────────
+
+    fn make_router_with_io(
+        mock_server_repo: MockServerRepository,
+        mock_channel_repo: MockChannelRepository,
+    ) -> Router {
+        let base_state = AppState::new_for_test(
+            Arc::new(MockUserRepository::new()),
+            Arc::new(mock_server_repo),
+            Arc::new(mock_channel_repo),
+            Arc::new(MockMessageRepository::new()),
+            make_settings(),
+        );
+        let (_, io) = socketioxide::SocketIo::new_layer();
+        io.ns("/", |_: socketioxide::extract::SocketRef| {});
+        let state = base_state.with_socket_io(io);
+
+        Router::new()
+            .route("/servers/:server_id/channels", axum::routing::post(create_channel))
+            .route("/channels/:channel_id", axum::routing::put(update_channel))
+            .route("/channels/:channel_id", axum::routing::delete(delete_channel))
+            .layer(middleware::from_fn_with_state(state.clone(), auth_middleware))
+            .with_state(state)
+    }
+
+    #[tokio::test]
+    async fn test_create_channel_with_socket_io() {
+        let user_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let settings = make_settings();
+        let token = make_token(user_id, &settings);
+
+        let mut mock_server_repo = MockServerRepository::new();
+        let mut mock_channel_repo = MockChannelRepository::new();
+
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |_, _| Ok(Some(make_member(user_id, server_id))));
+
+        mock_channel_repo
+            .expect_create()
+            .returning(move |_| Ok(make_channel(server_id)));
+
+        let app = make_router_with_io(mock_server_repo, mock_channel_repo);
+
+        let response: axum::response::Response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/servers/{}/channels", server_id))
+                    .header(header::AUTHORIZATION, format!("Bearer {}", token))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(json!({
+                        "name": "general",
+                        "description": null,
+                        "channel_type": null
+                    }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
+    #[tokio::test]
+    async fn test_update_channel_with_socket_io() {
+        let user_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let channel_id = Uuid::new_v4();
+        let settings = make_settings();
+        let token = make_token(user_id, &settings);
+
+        let mut mock_server_repo = MockServerRepository::new();
+        let mut mock_channel_repo = MockChannelRepository::new();
+
+        mock_channel_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(make_channel(server_id))));
+
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |_, _| Ok(Some(make_member(user_id, server_id))));
+
+        mock_channel_repo
+            .expect_update()
+            .returning(move |_| Ok(make_channel(server_id)));
+
+        let app = make_router_with_io(mock_server_repo, mock_channel_repo);
+
+        let response: axum::response::Response = app
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri(format!("/channels/{}", channel_id))
+                    .header(header::AUTHORIZATION, format!("Bearer {}", token))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(json!({ "name": "nouveau-nom" }).to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_delete_channel_with_socket_io() {
+        let user_id = Uuid::new_v4();
+        let server_id = Uuid::new_v4();
+        let channel_id = Uuid::new_v4();
+        let settings = make_settings();
+        let token = make_token(user_id, &settings);
+
+        let mut mock_server_repo = MockServerRepository::new();
+        let mut mock_channel_repo = MockChannelRepository::new();
+
+        mock_channel_repo
+            .expect_find_by_id()
+            .returning(move |_| Ok(Some(make_channel(server_id))));
+
+        mock_server_repo
+            .expect_find_member()
+            .returning(move |_, _| Ok(Some(make_member(user_id, server_id))));
+
+        mock_channel_repo
+            .expect_delete()
+            .returning(|_| Ok(()));
+
+        let app = make_router_with_io(mock_server_repo, mock_channel_repo);
 
         let response: axum::response::Response = app
             .oneshot(

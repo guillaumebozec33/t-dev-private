@@ -14,6 +14,8 @@ import ReactionPicker from "./reaction-picker";
 import ReactionDisplay from "./reaction-display";
 import type { Reaction } from "@/types/reaction";
 import {useAuthStore} from "@/lib/store/auth-store";
+import { useDmTypingIndicator } from "@/hooks/use-dm-typing-indicator";
+import { TypingIndicator } from "@/components/chat/typing-indicator";
 
 const GIF_PREFIX = "[GIF]";
 
@@ -40,12 +42,14 @@ interface DmViewProps {
   messages: DmMessage[];
   conversationId: string;
   otherUsername?: string;
+  otherUserId?: string;
 }
 
 export default function DmView({
   messages,
   conversationId,
   otherUsername,
+  otherUserId,
 }: DmViewProps) {
   const [messageText, setMessageText] = useState("");
   const [showGifPicker, setShowGifPicker] = useState(false);
@@ -56,6 +60,7 @@ export default function DmView({
   const { t, language } = useTranslation();
   const { user } = useAuthStore();
   const { socket } = useSocket();
+  const { typingUsers, startTyping, stopTyping } = useDmTypingIndicator(conversationId, otherUserId);
 
   const characterCount = [...messageText].length;
   const MAX_LENGTH = 2000;
@@ -149,6 +154,7 @@ export default function DmView({
   const handleSend = () => {
     const trimmed = messageText.trim();
     if (!trimmed || isOverLimit || mutation.isPending) return;
+    stopTyping();
     mutation.mutate({ content: trimmed });
     setMessageText("");
   };
@@ -200,6 +206,11 @@ export default function DmView({
                 onMouseEnter={() => setHoveredMessageId(msg.id)}
                 onMouseLeave={() => setHoveredMessageId(null)}
               >
+                {isHovered && (
+                  <div className="absolute right-0 -top-8 flex items-center gap-1 bg-white rounded-lg shadow-lg border border-gray-200 px-1 py-0.5 z-10">
+                    <ReactionPicker onSelect={(emoji) => handleReaction(msg.id, emoji)} />
+                  </div>
+                )}
                 <div className="max-w-xs lg:max-w-md">
                   {isGifMessage(msg.content) ? (
                     <GifContent url={getGifUrl(msg.content)} />
@@ -220,11 +231,6 @@ export default function DmView({
                     onToggle={(emoji) => handleReaction(msg.id, emoji)}
                   />
                 </div>
-                {isHovered && (
-                  <div className="mt-1">
-                    <ReactionPicker onSelect={(emoji) => handleReaction(msg.id, emoji)} />
-                  </div>
-                )}
               </div>
             );
           }
@@ -236,6 +242,11 @@ export default function DmView({
               onMouseEnter={() => setHoveredMessageId(msg.id)}
               onMouseLeave={() => setHoveredMessageId(null)}
             >
+              {isHovered && (
+                <div className="absolute left-0 -top-8 flex items-center gap-1 bg-white rounded-lg shadow-lg border border-gray-200 px-1 py-0.5 z-10">
+                  <ReactionPicker onSelect={(emoji) => handleReaction(msg.id, emoji)} />
+                </div>
+              )}
               <div className="flex-shrink-0">
                 {msg.sender_avatar_url ? (
                   <img
@@ -272,17 +283,14 @@ export default function DmView({
                   reactions={msgReactions}
                   onToggle={(emoji) => handleReaction(msg.id, emoji)}
                 />
-                {isHovered && (
-                  <div className="mt-1">
-                    <ReactionPicker onSelect={(emoji) => handleReaction(msg.id, emoji)} />
-                  </div>
-                )}
               </div>
             </div>
           );
         })}
         </div>
       </div>
+
+      <TypingIndicator typingUsers={typingUsers} />
 
       <div className="p-4 border-t border-gray-200">
         {isNearLimit && (
@@ -304,7 +312,7 @@ export default function DmView({
               username: otherUsername ?? "...",
             })}
             value={messageText}
-            onChange={(e) => setMessageText(e.target.value)}
+            onChange={(e) => { setMessageText(e.target.value); startTyping(); }}
             onKeyDown={handleKeyDown}
             rows={1}
             style={{ maxHeight: "120px", overflowY: "auto" }}

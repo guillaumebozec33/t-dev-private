@@ -4,7 +4,6 @@ import { createContext, useEffect, useState, ReactNode } from 'react';
 import { Socket } from 'socket.io-client';
 import { socketClient } from './socket-client';
 import { useAuthStore } from '@/lib/store/auth-store';
-import { SOCKET_EVENTS_EMIT } from '@/lib/constants/socket-events';
 
 interface SocketContextType {
   socket: Socket | null;
@@ -21,16 +20,17 @@ export function SocketProvider({ children }: { children: ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
   const token = useAuthStore((state) => state.token);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  const user = useAuthStore((state) => state.user);
+  const userId = useAuthStore((state) => state.user?.id);
 
   useEffect(() => {
-    if (isAuthenticated && token && user) {
+    if (isAuthenticated && token && userId) {
       const socketInstance = socketClient.connect(token);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSocket(socketInstance);
 
       const handleConnect = () => {
         setIsConnected(true);
-        socketInstance.emit('identify', { user_id: user.id });
+        socketInstance.emit('identify', { user_id: userId });
       };
       
       const handleDisconnect = () => {
@@ -41,10 +41,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       socketInstance.on('disconnect', handleDisconnect);
 
       if (socketInstance.connected) {
-        socketInstance.emit('identify', { user_id: user.id });
+        socketInstance.emit('identify', { user_id: userId });
       }
-      
-      setIsConnected(socketInstance.connected);
 
       return () => {
         socketInstance.off('connect', handleConnect);
@@ -52,10 +50,12 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       };
     } else {
       socketClient.disconnect();
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSocket(null);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsConnected(false);
     }
-  }, [isAuthenticated, token, user?.id]);
+  }, [isAuthenticated, token, userId]);
 
   return (
     <SocketContext.Provider value={{ socket, isConnected }}>

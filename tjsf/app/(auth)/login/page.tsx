@@ -76,7 +76,7 @@ export default function LoginForm() {
             onChange={setPassword}
             required
           />
-          <Button type="submit">{t("auth.login.submit")}</Button>
+          <Button type="submit" className="cursor-pointer">{t("auth.login.submit")}</Button>
           <p className="text-sm text-gray-600">
             {t("auth.login.needAccount")}{" "}
             <Link href="/register" className="text-steel-blue hover:underline">

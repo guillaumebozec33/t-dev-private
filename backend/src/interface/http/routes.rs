@@ -70,3 +70,98 @@ pub fn create_router(state: AppState, _socket_io: SocketIo) -> Router {
                 .layer(cors)
                 .with_state(state)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use axum::{body::Body, http::{Request, StatusCode}};
+    use tower::util::ServiceExt;
+    use crate::config::Settings;
+    use crate::shared::app_state::AppState;
+    use crate::domain::repositories::user_repository::MockUserRepository;
+    use crate::domain::repositories::server_repository::MockServerRepository;
+    use crate::domain::repositories::channel_repository::MockChannelRepository;
+    use crate::domain::repositories::message_repository::MockMessageRepository;
+    use crate::domain::repositories::dm_repository::MockDmRepository;
+    use crate::domain::repositories::reaction_repository::MockReactionRepository;
+
+    fn make_settings() -> Settings {
+        Settings {
+            jwt_secret: "secret_test".to_string(),
+            jwt_expiration: 3600,
+            database_url: "postgres://fake".to_string(),
+            redis_url: "redis://fake".to_string(),
+            server_host: "127.0.0.1".to_string(),
+            server_port: 8080,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_router_serves_swagger() {
+        let state = AppState::new_for_test_full(
+            Arc::new(MockUserRepository::new()),
+            Arc::new(MockServerRepository::new()),
+            Arc::new(MockChannelRepository::new()),
+            Arc::new(MockMessageRepository::new()),
+            Arc::new(MockDmRepository::new()),
+            Arc::new(MockReactionRepository::new()),
+            make_settings(),
+        );
+        let (_, io) = SocketIo::new_layer();
+        let app = create_router(state, io);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/swagger-ui/")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Swagger UI répond avec un redirect ou 200
+        assert!(
+            response.status() == StatusCode::OK || response.status().is_redirection(),
+            "Expected 200 or 3xx, got {}",
+            response.status()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_router_public_login_route() {
+        let mut mock_user_repo = MockUserRepository::new();
+        mock_user_repo
+            .expect_find_by_email()
+            .returning(|_| Ok(None));
+
+        let state = AppState::new_for_test_full(
+            Arc::new(mock_user_repo),
+            Arc::new(MockServerRepository::new()),
+            Arc::new(MockChannelRepository::new()),
+            Arc::new(MockMessageRepository::new()),
+            Arc::new(MockDmRepository::new()),
+            Arc::new(MockReactionRepository::new()),
+            make_settings(),
+        );
+        let (_, io) = SocketIo::new_layer();
+        let app = create_router(state, io);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/auth/login")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(r#"{"email":"test@test.com","password":"password123"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Should reach the handler (not 404), either 401 (user not found) or 400
+        assert_ne!(response.status(), StatusCode::NOT_FOUND);
+    }
+}

@@ -8,8 +8,8 @@ import InviteUserModal from "@/components/modals/invite-user-modal";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { deleteChannel } from "@/lib/api/endpoints/channels";
-import { deleteServer } from "@/lib/api/endpoints/servers";
-import { Plus, UserPlus, Lock, Settings, Hash, Volume2, Bell, Star, Heart, Zap, Globe, Music, Video, Image, FileText, Code, Coffee, Gamepad2, BookOpen, Megaphone, Shield, Flame, Smile } from "lucide-react";
+import { deleteServer, leaveServer } from "@/lib/api/endpoints/servers";
+import { Plus, UserPlus, Lock, Settings, Hash, Volume2, Bell, Star, Heart, Zap, Globe, Music, Video, Image, FileText, Code, Coffee, Gamepad2, BookOpen, Megaphone, Shield, Flame, Smile, LogOut } from "lucide-react";
 import Profile from "@/components/chat/profile";
 import { useTranslation } from "@/lib/i18n/language-context";
 import { useToast } from "@/components/ui/toast";
@@ -70,6 +70,32 @@ export default function ChannelList({
   const visibleChannels = canSeePrivateChannels
     ? channels
     : channels.filter((channel) => !channel.is_private);
+  const textChannels = visibleChannels.filter((channel) => channel.channel_type === "text");
+  const voiceChannels = visibleChannels.filter((channel) => channel.channel_type === "voice");
+
+    const renderChannelRow = (channel: Channel, index: number) => (
+        <div
+            key={channel.id}
+            onClick={() => onChannelSelect(channel.id)}
+            className={`group flex items-center px-2 py-1 rounded transition-colors cursor-pointer ${
+                selectedChannel?.id === channel.id
+                    ? "bg-sidebar-hover text-gray-900"
+                    : "text-gray-600 hover:bg-sidebar-hover hover:text-gray-900"
+            }`}
+        >
+            <ChannelIcon icon={channel.icon} isPrivate={channel.is_private} />
+            <span className="text-sm truncate flex-1">{checkLength(channel.name)}</span>
+            {(isOwner || isAdmin) && index !== 0 && (
+                <button
+                    onClick={(e) => { e.stopPropagation(); handleEditChannel(channel); }}
+                    className="opacity-0 group-hover:opacity-100 ml-1 flex-shrink-0 text-gray-400 hover:text-gray-700 transition-opacity cursor-pointer"
+                    title={t("channels.options")}
+                >
+                    <Settings size={14} className="hover:text-bordeaux-hover"/>
+                </button>
+            )}
+        </div>
+    );
 
   const deleteMutation = useMutation({
     mutationFn: deleteChannel,
@@ -78,6 +104,13 @@ export default function ChannelList({
     },
     onError: (error: Error) => handleError(error),
   });
+    const leaveServerMutation = useMutation({
+        mutationFn: leaveServer,
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["servers"] });
+        },
+        onError: (error: Error) => handleError(error),
+    });
 
   const deleteServerMutation = useMutation({
     mutationFn: deleteServer,
@@ -110,6 +143,15 @@ export default function ChannelList({
               {checkLength(selectedServer?.name) || t("channels.server")}
             </h2>
             <div className="flex items-center gap-1 flex-shrink-0">
+                {!isOwner && (
+                    <button
+                        onClick={() => selectedServer && leaveServerMutation.mutate(selectedServer.id)}
+                        className="text-gray-600 hover:text-bordeaux-hover cursor-pointer"
+                        title={t("channels.leaveServer")}
+                    >
+                        <LogOut size={16} />
+                    </button>
+                )}
               {isOwner && (
                 <button
                   onClick={() => setIsServerModalOpen(true)}
@@ -154,29 +196,16 @@ selectedServer?.description
                   </button>
                 )}
               </div>
-              {visibleChannels.map((channel, index) => (
-                <div
-                  key={channel.id}
-                  onClick={() => onChannelSelect(channel.id)}
-                  className={`group flex items-center px-2 py-1 rounded transition-colors cursor-pointer ${
-                    selectedChannel?.id === channel.id
-                      ? "bg-sidebar-hover text-gray-900"
-                      : "text-gray-600 hover:bg-sidebar-hover hover:text-gray-900"
-                  }`}
-                >
-                  <ChannelIcon icon={channel.icon} isPrivate={channel.is_private} />
-                  <span className="text-sm truncate flex-1">{checkLength(channel.name)}</span>
-                  {(isOwner || isAdmin) && index !== 0 && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleEditChannel(channel); }}
-                      className="opacity-0 group-hover:opacity-100 ml-1 flex-shrink-0 text-gray-400 hover:text-gray-700 transition-opacity cursor-pointer"
-                      title={t("channels.options")}
-                    >
-                      <Settings size={14} className="hover:text-bordeaux-hover"/>
-                    </button>
-                  )}
-                </div>
-              ))}
+              {textChannels.map((channel, index) => renderChannelRow(channel, index))}
+            </div>
+
+            <div className="mb-4">
+              <div className="flex items-center justify-between px-2 mb-2">
+                <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                  {t("channels.voiceChannels")}
+                </h3>
+              </div>
+              {voiceChannels.map((channel, index) => renderChannelRow(channel, index))}
             </div>
           </div>
         </ScrollArea>

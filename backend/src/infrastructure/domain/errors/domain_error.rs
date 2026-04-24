@@ -105,3 +105,49 @@ impl IntoResponse for DomainError {
         (status, body).into_response()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_error_display() {
+        assert_eq!(DomainError::UserNotFound.to_string(), "User not found");
+        assert_eq!(DomainError::ServerNotFound.to_string(), "Server not found");
+        assert_eq!(DomainError::ChannelNotFound.to_string(), "Channel not found");
+        assert_eq!(DomainError::InvalidCredentials.to_string(), "Invalid credentials");
+        assert_eq!(DomainError::AlreadyMember.to_string(), "Already a member of this server");
+        assert_eq!(DomainError::OwnerCannotLeave.to_string(), "Owner cannot leave the server");
+        assert_eq!(DomainError::Unauthorized.to_string(), "Unauthorized");
+        assert_eq!(DomainError::UseOwnInvitation.to_string(), "You cannot use your own invitation code");
+    }
+
+    #[tokio::test]
+    async fn test_into_response_status_codes() {
+        let cases: Vec<(DomainError, StatusCode)> = vec![
+            (DomainError::UserNotFound, StatusCode::NOT_FOUND),
+            (DomainError::ServerNotFound, StatusCode::NOT_FOUND),
+            (DomainError::ChannelNotFound, StatusCode::NOT_FOUND),
+            (DomainError::MessageNotFound, StatusCode::NOT_FOUND),
+            (DomainError::ConversationNotFound, StatusCode::NOT_FOUND),
+            (DomainError::InvitationNotFound, StatusCode::NOT_FOUND),
+            (DomainError::MemberNotFound, StatusCode::NOT_FOUND),
+            (DomainError::EmailAlreadyExists, StatusCode::CONFLICT),
+            (DomainError::UsernameAlreadyExists, StatusCode::CONFLICT),
+            (DomainError::AlreadyMember, StatusCode::CONFLICT),
+            (DomainError::InvalidCredentials, StatusCode::UNAUTHORIZED),
+            (DomainError::Unauthorized, StatusCode::UNAUTHORIZED),
+            (DomainError::Forbidden("x".into()), StatusCode::FORBIDDEN),
+            (DomainError::OwnerCannotLeave, StatusCode::FORBIDDEN),
+            (DomainError::UserBanned("2099-01-01".into()), StatusCode::FORBIDDEN),
+            (DomainError::UserBannedPermanently, StatusCode::FORBIDDEN),
+            (DomainError::ValidationError("bad".into()), StatusCode::BAD_REQUEST),
+            (DomainError::UseOwnInvitation, StatusCode::BAD_REQUEST),
+            (DomainError::InternalError("oops".into()), StatusCode::INTERNAL_SERVER_ERROR),
+        ];
+        for (err, expected_status) in cases {
+            let response = err.into_response();
+            assert_eq!(response.status(), expected_status);
+        }
+    }
+}

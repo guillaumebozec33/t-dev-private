@@ -76,6 +76,7 @@
   },
   "channels": {
     "textChannels": "Canaux textuels",
+    "voiceChannels": "Canaux vocaux",
     "createChannel": "Créer un canal",
     "inviteUser": "Inviter un utilisateur",
     "server": "Serveur",
@@ -153,9 +154,24 @@
     "nameLabel": "Nom du canal",
     "iconLabel": "Icône",
     "iconDefault": "Défaut (#)",
+    "typeLabel": "Type de canal",
+    "textType": "Textuel",
+    "voiceType": "Vocal",
     "privateLabel": "Canal privé (réservé aux admins)",
     "cancel": "Annuler",
     "tooLong": "Le nom du canal est trop long :"
+  },
+  "voice": {
+    "title": "Salon vocal",
+    "join": "Rejoindre le vocal",
+    "leave": "Quitter le vocal",
+    "connecting": "Connexion au vocal...",
+    "connected": "Connecté au salon vocal",
+    "disconnected": "Déconnecté du salon vocal",
+    "participants": "Participants",
+    "empty": "Personne n'est encore dans ce salon vocal",
+    "permissionDenied": "Impossible d'accéder au microphone",
+    "idle": "Rejoignez ce salon pour lancer l'audio"
   },
   "dm": {
     "inboxTitle": "Messages privés",
